@@ -1,5 +1,5 @@
 # BonPTxWDM BonDriver_PTxWDM.dll
-BonDriver optimized to pt2wdm for PT1/PT2/PT3.
+BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se507005.html) for EARTHSOFT PT1/PT2/PT3.
 
   BonPTxWDM.slnをコンパイルして出来上がったBonDriver_PTxWDM.dllと以下のファイル群をアプリ側のBonDriverフォルダに配置して動作確認…
   ```
