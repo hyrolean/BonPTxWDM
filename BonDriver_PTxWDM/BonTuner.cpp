@@ -810,19 +810,19 @@ const DWORD CBonTuner::GetCurChannel(void)
 //-----
 const DWORD CBonTuner::GetTotalDeviceNum(void)
 {
-	if(m_iTunerId<0) return 1;
+	if(m_iTunerId>=0) return 1;
 	return CPtDrvWrapper::TunerCount();
 }
 //-----
 const DWORD CBonTuner::GetActiveDeviceNum(void)
 {
-	if(m_iTunerId<0) return 1;
+	if(m_iTunerId>=0) return m_pcTuner?1:0;
 	int num = CPtDrvWrapper::TunerCount() ;
 	int act = 0 ;
 
 	for(int i=0;i<num;i++) {
 		auto tuner = new CPtDrvWrapper(m_isISDBS,i) ;
-		if(!m_pcTuner->HandleAllocated())
+		if(!tuner->HandleAllocated())
 			act++;
 		delete tuner ;
 	}
