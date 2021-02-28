@@ -19,7 +19,7 @@ BEGIN
         BLOCK "041104b0"
         BEGIN
             VALUE "CompanyName", "hyrolean-dtv"
-            VALUE "FileDescription", "BonDriver_PTxWDM for pt2wdm"
+            VALUE "FileDescription", "BonDriver_PTxWDM via pt2wdm"
             VALUE "FileVersion", "0,2021,02,28"
             VALUE "InternalName", "BonDriver_PTxWDM.dll"
             VALUE "LegalCopyright", "hyrolean-dtv 2021"
