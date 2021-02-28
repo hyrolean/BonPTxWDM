@@ -9,4 +9,4 @@ BonDriver optimized to pt2wdm for PT1/PT2/PT3.
   BonDriver_PTxWDM.ch.txt ← BonPTxWDM 用チャンネルファイル (配置しなくてもおｋ)
   ```
 
-  **初見サンプルです。 無保証( NO WARRANTY )です。 お取り扱いには、十分にご注意ください。 **
+  **初見サンプルです。 無保証( NO WARRANTY )です。 お取り扱いには、十分にご注意ください。**
