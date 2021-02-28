@@ -832,7 +832,8 @@ const DWORD CBonTuner::GetActiveDeviceNum(void)
 //-----
 const BOOL CBonTuner::SetLnbPower(const BOOL bEnable)
 {
-	if(BON3LNB) return TRUE;
+	if(!m_isISDBS) return FALSE;
+	if(!BON3LNB) return TRUE;
 	return ChangeLnbPower(bEnable) ;
 }
 //===========================================================================
