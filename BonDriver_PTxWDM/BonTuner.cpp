@@ -189,6 +189,7 @@ bool CBonTuner::LoadIniFile(string strIniFileName)
   LOADINT(BON3LNB);
   LOADINT(TRYSPARES);
   LOADINT(FASTSCAN);
+  LOADINT(SETCHDELAY);
 
   Section = "DEFSPACE" ;
   wstring InvisibleSpaces ;
