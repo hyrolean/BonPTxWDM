@@ -14,4 +14,4 @@ BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se5
   
 ## TODO
 - [x] EDCB/TVTest配下での動作(１プロセス１チューナー構成)
-- [ ] Spinelで複数のチューナーを同時使用出来ない問題の解決(１プロセス多チューナー構成)
+- [ ] Spinelなどのプロクシソフト配下での複数のチューナーを同時使用出来ない問題の解決(１プロセス多チューナー構成)
