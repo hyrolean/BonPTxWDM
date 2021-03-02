@@ -9,4 +9,9 @@ BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se5
   BonDriver_PTxWDM.ch.txt ← BonPTxWDM 用チャンネルファイル (配置しなくてもおｋ)
   ```
 
-  **初見サンプルです。 無保証( NO WARRANTY )です。 お取り扱いには、十分にご注意ください。**
+  **※初見サンプルです。 無保証( NO WARRANTY )です。 お取り扱いには、十分にご注意ください。**
+  
+  
+## TODO
+- [x] EDCB/TVTest配下での動作(１プロセス１チューナー構成)
+- [ ] Spinelで複数のチューナーを同時使用出来ない問題の解決(１プロセス多チューナー構成)
