@@ -148,6 +148,7 @@ protected: // internals
 
     // チューナーのプロパティ
     std::wstring m_strTunerName ;
+	std::wstring m_strTunerStaticName;
 	int m_iTunerId, m_iTunerStaticId;
 	bool m_isISDBS;
 
@@ -165,6 +166,8 @@ protected: // internals
 
 	DWORD			m_dwCurSpace;
 	DWORD			m_dwCurChannel;
+	BOOL			m_hasStream;
+	HANDLE			m_hTunerMutex;
 
 	//Lnb
 	HANDLE m_hLnbMutex;

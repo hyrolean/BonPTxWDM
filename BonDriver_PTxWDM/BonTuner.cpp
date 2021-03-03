@@ -14,10 +14,14 @@ using namespace std;
 
 static CRITICAL_SECTION secBonTuners;
 static set<CBonTuner*> BonTuners ;
+static HANDLE hBonTunersMutex = NULL ;
+#define BONTUNERS_MUTEXNAME L"BonDriver_PTxWDM BonTuners Mutex"
+#define BONTUNER_STATIC_FORMAT L"BonDriver_PTxWDM-%c%d"
 
 //---------------------------------------------------------------------------
 void InitializeBonTuners(HMODULE hModule)
 {
+	hBonTunersMutex = CreateMutex(NULL,FALSE,BONTUNERS_MUTEXNAME);
 	::InitializeCriticalSection(&secBonTuners);
 	CBonTuner::HModule = hModule;
 }
@@ -30,6 +34,10 @@ void FinalizeBonTuners()
 	for(auto bon: clone) if(bon!=NULL) bon->Release();
 	::LeaveCriticalSection(&secBonTuners);
 	::DeleteCriticalSection(&secBonTuners);
+	if(hBonTunersMutex) {
+		CloseHandle(hBonTunersMutex) ;
+		hBonTunersMutex=NULL;
+	}
 }
 //---------------------------------------------------------------------------
 #pragma warning( disable : 4273 )
@@ -70,6 +78,8 @@ void CBonTuner::InitTunerProperty()
 	m_hLnbMutex = NULL;
 	m_dwCurSpace = 0xFF;
 	m_dwCurChannel = 0xFF;
+	m_hasStream = FALSE;
+	m_hTunerMutex = NULL;
 	m_iTunerId = m_iTunerStaticId = -1;
 
 	// フラグの初期化
@@ -137,13 +147,12 @@ void CBonTuner::InitTunerProperty()
 	  }
 	}
 
-
 	// チャンネル情報再構築
 	RebuildChannels() ;
 
-
-	LoadTuner() ;
-
+	for(auto t=Elapsed();Elapsed(t)<3000;Sleep(50)) {
+		if(LoadTuner())  break ;
+	}
 }
 //---------------------------------------------------------------------------
 bool CBonTuner::LoadIniFile(string strIniFileName)
@@ -155,34 +164,34 @@ bool CBonTuner::LoadIniFile(string strIniFileName)
   string Section;
 
   #define LOADSTR2(val,key) do { \
-      GetPrivateProfileStringA(Section.c_str(),key,val.c_str(),buffer,BUFFER_SIZE,strIniFileName.c_str()) ; \
-      val = buffer ; \
-    }while(0)
+	  GetPrivateProfileStringA(Section.c_str(),key,val.c_str(),buffer,BUFFER_SIZE,strIniFileName.c_str()) ; \
+	  val = buffer ; \
+	}while(0)
   #define LOADSTR(val) LOADSTR2(val,#val)
   #define LOADWSTR(val) do { \
-      string temp = wcs2mbcs(val) ; \
-      LOADSTR2(temp,#val) ; val = mbcs2wcs(temp) ; \
-    }while(0)
+	  string temp = wcs2mbcs(val) ; \
+	  LOADSTR2(temp,#val) ; val = mbcs2wcs(temp) ; \
+	}while(0)
 
   #define LOADINT2(val,key,a2i) do { \
-      GetPrivateProfileStringA(Section.c_str(),key,"",buffer,BUFFER_SIZE,strIniFileName.c_str()) ; \
-      val = a2i(buffer,val) ; \
-    }while(0)
+	  GetPrivateProfileStringA(Section.c_str(),key,"",buffer,BUFFER_SIZE,strIniFileName.c_str()) ; \
+	  val = a2i(buffer,val) ; \
+	}while(0)
   #define LOADINT(val) LOADINT2(val,#val,acalci)
   #define LOADINT64(val) LOADINT2(val,#val,acalci64)
 
   #define LOADSTR_SEC(sec,val) do {\
-      Section = #sec ; \
-      LOADSTR2(sec##val,#val); \
-    }while(0)
+	  Section = #sec ; \
+	  LOADSTR2(sec##val,#val); \
+	}while(0)
   #define LOADINT_SEC(sec,val) do {\
-      Section = #sec ; \
-      LOADINT2(sec##val,#val,acalci); \
-    }while(0)
+	  Section = #sec ; \
+	  LOADINT2(sec##val,#val,acalci); \
+	}while(0)
   #define LOADINT64_SEC(sec,val) do {\
-      Section = #sec ; \
-      LOADINT2(sec##val,#val,acalci64); \
-    }while(0)
+	  Section = #sec ; \
+	  LOADINT2(sec##val,#val,acalci64); \
+	}while(0)
 
   Section = "SET" ;
   LOADINT(USELNB);
@@ -535,7 +544,7 @@ const BOOL CBonTuner::SetRealChannel(const DWORD dwCh)
 
 	//ストリーム再開
 	//is_channel_valid = tuned ? TRUE : FALSE ;
-	m_pcTuner->SetStreamEnable(true);
+	if(tuned) m_pcTuner->SetStreamEnable(true);
 
 	if (SETCHDELAY)
 		Sleep(SETCHDELAY);
@@ -548,42 +557,85 @@ const BOOL CBonTuner::SetRealChannel(const DWORD dwCh)
 //---------------------------------------------------------------------------
 BOOL CBonTuner::LoadTuner()
 {
+	if(hBonTunersMutex)
+		WaitForSingleObject(hBonTunersMutex , INFINITE);
 
-	int num = CPtDrvWrapper::TunerCount() ;
-	if(!num||num<=m_iTunerId) return FALSE ;
+	do {
 
+		int num = CPtDrvWrapper::TunerCount() ;
+		if(!num||num<=m_iTunerId) break ;
 
-	if(m_iTunerId>=0) {
-		auto tuner = new CPtDrvWrapper(m_isISDBS,m_iTunerId) ;
-		if(!tuner->HandleAllocated()) {
-			delete tuner ;
-			if(!TRYSPARES) return FALSE ;
+		#if 0
+		if(num>=2) { // TEST
+		  auto a = new CPtDrvWrapper(0,0);
+		  auto b = new CPtDrvWrapper(0,1);
+		  auto c = new CPtDrvWrapper(1,0);
+		  auto d = new CPtDrvWrapper(1,1);
+		  LINEDEBUG;
+		  if( a->HandleAllocated() ) DBGOUT("A\n");
+		  if( b->HandleAllocated() ) DBGOUT("B\n");
+		  if( c->HandleAllocated() ) DBGOUT("C\n");
+		  if( d->HandleAllocated() ) DBGOUT("D\n");
+		  delete a; delete b; delete c; delete d;
 		}
-		else {
-			m_pcTuner = tuner ;
-			m_iTunerStaticId = m_iTunerId;
-		}
-	}
-	if(!m_pcTuner) {
-		for(int i=0;i<num;i++) {
-			auto tuner = new CPtDrvWrapper(m_isISDBS,i) ;
-			if(!tuner->HandleAllocated())
+		#endif
+
+
+		if(m_iTunerId>=0) {
+			auto tuner = new CPtDrvWrapper(m_isISDBS,m_iTunerId) ;
+			if(!tuner->HandleAllocated()) {
 				delete tuner ;
+				if(!TRYSPARES) break ;
+			}
 			else {
 				m_pcTuner = tuner ;
-				m_iTunerStaticId = i;
-				break;
+				m_iTunerStaticId = m_iTunerId;
 			}
 		}
+		if(!m_pcTuner) {
+			for(int i=0;i<num;i++) {
+				auto tuner = new CPtDrvWrapper(m_isISDBS,i) ;
+				if(!tuner->HandleAllocated())
+					delete tuner ;
+				else {
+					m_pcTuner = tuner ;
+					m_iTunerStaticId = i;
+					break;
+				}
+			}
+		}
+
+	}while(0);
+
+	if(m_pcTuner!=NULL) {
+		WCHAR bonName[100];
+		swprintf_s(bonName,BONTUNER_STATIC_FORMAT,(m_isISDBS?L'S':L'T'),m_iTunerStaticId) ;
+		m_strTunerStaticName = bonName;
+		m_hTunerMutex = CreateMutex(NULL, TRUE, bonName);
 	}
+
+	if(hBonTunersMutex)
+		ReleaseMutex(hBonTunersMutex);
 
 	return m_pcTuner!=NULL ? TRUE : FALSE ;
 }
 //---------------------------------------------------------------------------
 void CBonTuner::UnloadTuner()
 {
-	CloseTuner();
+	if(hBonTunersMutex)
+		WaitForSingleObject(hBonTunersMutex , INFINITE);
+
 	if(m_pcTuner) {
+		if(USELNB&&m_isISDBS) {
+			ChangeLnbPower(FALSE);
+		}
+		m_pcTuner->SetStreamEnable(false);
+		m_pcTuner->SetTunerSleep(true);
+		if(m_hTunerMutex) {
+			ReleaseMutex(m_hTunerMutex);
+			CloseHandle(m_hTunerMutex);
+			m_hTunerMutex = NULL;
+		}
 		delete m_pcTuner ;
 		m_pcTuner = NULL ;
 	}
@@ -592,6 +644,10 @@ void CBonTuner::UnloadTuner()
 		CloseHandle(m_hLnbMutex);
 		m_hLnbMutex = NULL;
 	}
+
+	if(hBonTunersMutex)
+		ReleaseMutex(hBonTunersMutex);
+
 }
 //---------------------------------------------------------------------------
 const BOOL CBonTuner::ChangeLnbPower(BOOL power)
@@ -648,6 +704,7 @@ void CBonTuner::CloseTuner(void)
 		if(USELNB&&m_isISDBS) {
 			ChangeLnbPower(FALSE);
 		}
+		m_pcTuner->SetStreamEnable(false);
 		m_pcTuner->SetTunerSleep(true);
 	}
 }
@@ -660,6 +717,7 @@ const BOOL CBonTuner::SetChannel(const BYTE bCh)
 const float CBonTuner::GetSignalLevel(void)
 {
 	if(!m_pcTuner) return -1.f;
+	if(!m_hasStream) return 0.f;
 
 	UINT    cn100, curAgc, maxAgc;
 	m_pcTuner->GetCnAgc(&cn100, &curAgc, &maxAgc);
@@ -669,14 +727,18 @@ const float CBonTuner::GetSignalLevel(void)
 //-----
 const DWORD CBonTuner::WaitTsStream(const DWORD dwTimeOut)
 {
+	DWORD timeout = dwTimeOut ;
+	if(!timeout) timeout = 60000 * 5 ;
+
 	if(!m_pcTuner) return WAIT_FAILED;
+	if(!m_hasStream) {
+		Sleep(timeout);
+		return WAIT_TIMEOUT;
+	}
 
 	if(!m_pcTuner->IsStreamEnabled()){
 		m_pcTuner->SetStreamEnable(true);
 	}
-
-	DWORD timeout = dwTimeOut ;
-	if(!timeout) timeout = 60000 * 5 ;
 
 	for(DWORD s=Elapsed();Elapsed(s)<timeout;SleepEx(10,FALSE)) {
 		if(m_pcTuner->CurStreamSize())
@@ -687,6 +749,7 @@ const DWORD CBonTuner::WaitTsStream(const DWORD dwTimeOut)
 //-----
 const DWORD CBonTuner::GetReadyCount(void)
 {
+	if(!m_hasStream) return 0;
 	return m_pcTuner ? m_pcTuner->CurStreamSize() : 0UL ;
 }
 //-----
@@ -694,14 +757,19 @@ const BOOL CBonTuner::GetTsStream(BYTE *pDst, DWORD *pdwSize, DWORD *pdwRemain)
 {
 	if(!m_pcTuner) return FALSE;
 
-	if(!m_pcTuner->IsStreamEnabled()){
-		m_pcTuner->SetStreamEnable(true);
-	}
-
 	if(!pdwSize) return FALSE ;
 	UINT size = *pdwSize ;
 	UINT outSz = 0 ;
 	*pdwSize=0;
+
+	if(!m_hasStream) {
+		if(pdwRemain) *pdwRemain = 0 ;
+		return TRUE;
+	}
+
+	if(!m_pcTuner->IsStreamEnabled()){
+		m_pcTuner->SetStreamEnable(true);
+	}
 
 	if(!m_pcTuner->GetStreamData(pDst,size,&outSz))
 		return FALSE ;
@@ -784,11 +852,13 @@ const BOOL CBonTuner::SetChannel(const DWORD dwSpace, const DWORD dwChannel)
 	DWORD start = m_SpaceAnchors[dwSpace] ;
 	DWORD end = dwSpace + 1 >= m_SpaceAnchors.size() ? (DWORD)m_Channels.size() : m_SpaceAnchors[dwSpace + 1];
 
+	m_hasStream = FALSE;
 	if(dwChannel<end-start) {
 	  BOOL tuned = SetRealChannel(start+dwChannel) ;
 	  if( tuned ){
 		m_dwCurSpace = dwSpace;
 		m_dwCurChannel = dwChannel;
+		m_hasStream = TRUE;
 	  }
 	  if(FASTSCAN) return tuned ? TRUE : FALSE ;
 	  return TRUE ;
@@ -810,24 +880,41 @@ const DWORD CBonTuner::GetCurChannel(void)
 //-----
 const DWORD CBonTuner::GetTotalDeviceNum(void)
 {
+#if 1 // １プロセス１チューナー
+
+	return 1;
+
+#else // １プロセス多チューナー（未対応）
+
 	if(m_iTunerId>=0) return 1;
 	return CPtDrvWrapper::TunerCount();
+
+#endif
 }
 //-----
 const DWORD CBonTuner::GetActiveDeviceNum(void)
 {
+#if 1 // １プロセス１チューナー
+
+	return m_pcTuner? 1: 0;
+
+#else // １プロセス多チューナー（未対応）
+
 	if(m_iTunerId>=0) return m_pcTuner?1:0;
 	int num = CPtDrvWrapper::TunerCount() ;
 	int act = 0 ;
 
 	for(int i=0;i<num;i++) {
-		auto tuner = new CPtDrvWrapper(m_isISDBS,i) ;
-		if(!tuner->HandleAllocated())
-			act++;
-		delete tuner ;
+		WCHAR mutexName[100];
+		swprintf_s(mutexName,BONTUNER_STATIC_FORMAT,(m_isISDBS?L'S':L'T'),i) ;
+		if(HANDLE mutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, mutexName)) {
+			act++; CloseHandle(mutex);
+		}
 	}
 
 	return act ;
+
+#endif
 }
 //-----
 const BOOL CBonTuner::SetLnbPower(const BOOL bEnable)
