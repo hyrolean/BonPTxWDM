@@ -14,23 +14,17 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav</Extensions>
     </Filter>
     <Filter Include="Common">
-      <UniqueIdentifier>{e81db3e4-eba0-4191-9c35-e066b916a570}</UniqueIdentifier>
+      <UniqueIdentifier>{f2ec7f6d-17c6-4429-a7df-1cbad3d8d7a5}</UniqueIdentifier>
     </Filter>
     <Filter Include="Common\inc">
-      <UniqueIdentifier>{6509d253-8e91-49b9-af4d-35ce2d744996}</UniqueIdentifier>
+      <UniqueIdentifier>{e080095f-ee7d-4a3e-817d-4d7207fbb0cf}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="BonDriver_PTxWDM.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="dllmain.cpp">
+    <ClCompile Include="PTxWDMCtrl.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
     <ClCompile Include="stdafx.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="BonTuner.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
     <ClCompile Include="..\Common\pryutil.cpp">
@@ -47,42 +41,50 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="PTxWDMCtrl.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
     <ClInclude Include="stdafx.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
     <ClInclude Include="targetver.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="BonTuner.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="IBonDriver.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="IBonDriver2.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="IBonDriver3.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="twindbg.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
     <ClInclude Include="..\Common\pryutil.h">
-      <Filter>Common</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Common\inc\PtDrvIfLib.h">
-      <Filter>Common\inc</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Common\PTxWDMCmdSrv.h">
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="..\Common\PtDrvWrap.h">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="..\Common\PTxWDMCmd.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\PTxWDMCmdSrv.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\SharedCmd.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\twindbg.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Common\inc\PtDrvIfLib.h">
+      <Filter>Common\inc</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="BonDriver.rc">
+    <Image Include="PTxWDMCtrl.ico">
+      <Filter>リソース ファイル</Filter>
+    </Image>
+    <Image Include="small.ico">
+      <Filter>リソース ファイル</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="PTxWDMCtrl.rc">
       <Filter>リソース ファイル</Filter>
     </ResourceCompile>
   </ItemGroup>

@@ -9,7 +9,7 @@
 #define	NTSTATUS	long
 #endif
 
-#include "PtDrvIfLib.h"
+#include "inc/PtDrvIfLib.h"
 
 
 namespace PRY8EAlByw {
@@ -41,6 +41,7 @@ public:
 	CPtDrvWrapper(BOOL sate, int id) {
 		Initialize();
 		WCHAR   wcTunerName[32];
+		ZeroMemory(wcTunerName,sizeof(wcTunerName));
 		StringCchPrintf( wcTunerName, 32,
 			sate ? PT_DEV_BS_NAME : PT_DEV_BT_NAME , (id>>1)+1 , (id&1)+1 ) ;
 		DevName_ = wcTunerName ;
@@ -78,7 +79,7 @@ public:
 		MakeStatus(PtDrvGetVersion(Handle_, &version));
 		return version;
 	}
-	UINT ClockCounter() {
+	UINT PciClockCounter() {
 		UINT counter=0;
 		MakeStatus(PtDrvGetPciClockCounter(Handle_, &counter));
 		return counter;

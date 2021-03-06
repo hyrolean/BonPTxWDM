@@ -3,6 +3,8 @@
 #include <cctype>
 #include <process.h>
 #include <locale.h>
+#include <Shlwapi.h>
+#pragma comment(lib, "Shlwapi.lib")
 
 #include "pryutil.h"
 //---------------------------------------------------------------------------
@@ -178,13 +180,21 @@ int file_age_of(string filename)
 //---------------------------------------------------------------------------
 bool file_is_existed(string filename)
 {
-  return file_age_of(filename) != -1 ;
+#if 0
+  return file_age_of(filename.c_str()) != -1 ;
+#else
+  return PathFileExistsA(filename.c_str()) && !folder_is_existed(filename) ;
+#endif
 }
 //---------------------------------------------------------------------------
 bool folder_is_existed(string filename)
 {
+#if 0
   DWORD attr = GetFileAttributesA(filename.c_str()) ;
   return attr!=MAXDWORD && (attr&FILE_ATTRIBUTE_DIRECTORY) ? true : false ;
+#else
+  return PathIsDirectoryA(filename.c_str()) ? true : false ;
+#endif
 }
 //===========================================================================
 // acalci
@@ -601,11 +611,27 @@ void acalci64_entry_const(const char *name, __int64 val)
 //---------------------------------------------------------------------------
 static int event_create_count = 0 ;
 //---------------------------------------------------------------------------
-event_object::event_object(BOOL _InitialState,wstring _name)
+event_object::event_object(BOOL initialState_,wstring name_,BOOL security_)
 {
-  if(_name.empty()) _name = L"event"+itows(event_create_count++) ;
-  name = _name ;
-  event = CreateEvent(NULL,FALSE,_InitialState,name.c_str()) ;
+  if(name_.empty()) name_ = L"Local\\event"+itows(event_create_count++) ;
+  name = name_ ;
+
+  SECURITY_ATTRIBUTES sa,*psa=NULL;
+  SECURITY_DESCRIPTOR sd;
+  if(security_) {
+	ZeroMemory(&sd,sizeof sd);
+	if(InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION)) {
+	  if(SetSecurityDescriptorDacl(&sd, TRUE, NULL, FALSE)) {
+		ZeroMemory(&sa,sizeof sa);
+		sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+		sa.bInheritHandle = FALSE;
+		sa.lpSecurityDescriptor = &sd;
+		psa = &sa;
+	  }
+    }
+  }
+
+  event = CreateEvent(psa,FALSE,initialState_,name.c_str()) ;
 #ifdef _DEBUG
   if(is_valid()) {
     TRACE(L"event_object created. [name=%s]\r\n",name.c_str()) ;
@@ -1052,6 +1078,82 @@ bool CAsyncFifo::WaitForAllocation()
     DBGOUT("Async FIFO allocation: allocation waiting %s.\r\n",result?"completed":"failed") ;
 
     return result ;
+}
+//===========================================================================
+// CSharedMemory
+//---------------------------------------------------------------------------
+CSharedMemory::CSharedMemory(wstring name, DWORD size)
+  : BaseName(name), HMutex(NULL), HMapping(NULL), PMapView(NULL)
+{
+    wstring mutex_name = BaseName + L"_SharedMemory_Mutex";
+	wstring mapping_name = BaseName + L"_SharedMemory_Mapping";
+
+	HMutex = CreateMutex(NULL, FALSE, mutex_name.c_str());
+    if(Lock()) {
+	    HMapping = CreateFileMapping(INVALID_HANDLE_VALUE, NULL,
+			PAGE_READWRITE, 0, size, mapping_name.c_str());
+	    BOOL map_existed = (GetLastError() == ERROR_ALREADY_EXISTS);
+	    SzMapView=0;
+		if (HMapping) {
+	        PMapView = MapViewOfFile(HMapping, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+	        if (PMapView) {
+	            SzMapView = size;
+	            if (!map_existed) {
+	                //ã§óLóÃàÊèâä˙âª
+					ZeroMemory(PMapView, SzMapView);
+	            }
+	        }
+	    }
+	    Unlock();
+	}
+}
+//---------------------------------------------------------------------------
+CSharedMemory::~CSharedMemory()
+{
+    if(PMapView) UnmapViewOfFile(PMapView);
+    if(HMapping) CloseHandle(HMapping);
+    if(HMutex) 	 CloseHandle(HMutex);
+}
+//---------------------------------------------------------------------------
+bool CSharedMemory::IsValid() const
+{
+	return HMutex && HMapping && PMapView ;
+}
+//---------------------------------------------------------------------------
+bool CSharedMemory::Lock(DWORD timeout) const
+{
+	if(!HMutex) return false ;
+	return WaitForSingleObject(HMutex, timeout) == WAIT_OBJECT_0 ;
+}
+//---------------------------------------------------------------------------
+bool CSharedMemory::Unlock() const
+{
+	if(!HMutex) return false ;
+	return ReleaseMutex(HMutex) ? true : false ;
+}
+//---------------------------------------------------------------------------
+DWORD CSharedMemory::Read(LPVOID *dst, DWORD sz, DWORD pos
+	, DWORD timeout) const
+{
+    if(!IsValid()||Size()<=pos) return 0;
+	if(sz+pos>Size()) sz = Size()-pos ;
+	if(Lock(timeout)) {
+		CopyMemory(dst,&static_cast<BYTE*>(Memory())[pos],sz);
+		Unlock();
+	}
+	return sz;
+}
+//---------------------------------------------------------------------------
+DWORD CSharedMemory::Write(const LPVOID *src, DWORD sz, DWORD pos
+	, DWORD timeout)
+{
+    if(!IsValid()||Size()<=pos) return 0;
+	if(sz+pos>Size()) sz = Size()-pos ;
+	if(Lock(timeout)) {
+		CopyMemory(&static_cast<BYTE*>(Memory())[pos],src,sz);
+		Unlock();
+	}
+	return sz;
 }
 //===========================================================================
 // Initializer

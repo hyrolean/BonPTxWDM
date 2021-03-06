@@ -5,6 +5,8 @@ VisualStudioVersion = 14.0.24720.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BonDriver_PTxWDM", "BonDriver_PTxWDM\BonDriver_PTxWDM.vcxproj", "{35767E46-B2A7-4078-8BC6-25E2CB98A2BC}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PTxWDMCtrl", "PTxWDMCtrl\PTxWDMCtrl.vcxproj", "{F777DB95-DA94-412F-8010-D96BAB7045A6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -21,6 +23,14 @@ Global
 		{35767E46-B2A7-4078-8BC6-25E2CB98A2BC}.Release|Win32.Build.0 = Release|Win32
 		{35767E46-B2A7-4078-8BC6-25E2CB98A2BC}.Release|x64.ActiveCfg = Release|x64
 		{35767E46-B2A7-4078-8BC6-25E2CB98A2BC}.Release|x64.Build.0 = Release|x64
+		{F777DB95-DA94-412F-8010-D96BAB7045A6}.Debug|Win32.ActiveCfg = Debug|Win32
+		{F777DB95-DA94-412F-8010-D96BAB7045A6}.Debug|Win32.Build.0 = Debug|Win32
+		{F777DB95-DA94-412F-8010-D96BAB7045A6}.Debug|x64.ActiveCfg = Debug|x64
+		{F777DB95-DA94-412F-8010-D96BAB7045A6}.Debug|x64.Build.0 = Debug|x64
+		{F777DB95-DA94-412F-8010-D96BAB7045A6}.Release|Win32.ActiveCfg = Release|Win32
+		{F777DB95-DA94-412F-8010-D96BAB7045A6}.Release|Win32.Build.0 = Release|Win32
+		{F777DB95-DA94-412F-8010-D96BAB7045A6}.Release|x64.ActiveCfg = Release|x64
+		{F777DB95-DA94-412F-8010-D96BAB7045A6}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

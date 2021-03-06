@@ -9,8 +9,8 @@
 #include <string>
 #include <set>
 
-#include "inc/PtDrvWrap.h"
-#include "pryutil.h"
+#include "../Common/PTxWDMCmd.h"
+#include "../Common/pryutil.h"
 #include "IBonDriver3.h"
 
 void InitializeBonTuners(HMODULE hModule);
@@ -135,7 +135,20 @@ protected: // settings
 	BOOL TRYSPARES;
 	DWORD SETCHDELAY;
 
+	// 非同期TS
+	DWORD ASYNCTSDATASIZE;
+	DWORD ASYNCTSQUEUENUM;
+	DWORD ASYNCTSQUEUEMAX;
+	DWORD ASYNCTSEMPTYBORDER;
+	DWORD ASYNCTSEMPTYLIMIT;
+	DWORD ASYNCTSTHREADWAIT;
+	int   ASYNCTSTHREADPRIORITY;
+	BOOL  ASYNCTSALLOCWAITING;
+	int   ASYNCTSALLOCPRIORITY;
+
 protected: // internals
+
+	std::string m_strPath;
 
 	void InitTunerProperty() ;
 	bool LoadIniFile(std::string strIniFileName);
@@ -173,11 +186,18 @@ protected: // internals
 	HANDLE m_hLnbMutex;
 	const BOOL ChangeLnbPower(BOOL power);
 
-	//バッファ
-	BUFFER<BYTE> tmpBuf;
+	//非同期TS
+	CAsyncFifo		*m_AsyncTSFifo;
+	HANDLE			m_hAsyncTsThread;
+	BOOL			m_bAsyncTsTerm;
+	event_object	m_evAsyncTsStream;
+	int AsyncTsThreadProcMain();
+	static unsigned int __stdcall AsyncTsThreadProc (PVOID pv);
+	void StartAsyncTsThread();
+	void StopAsyncTsThread();
 
 	//本体
-	CPtDrvWrapper *m_pcTuner;
+	CPTxWDMCmdOperator	*m_CmdClient;
 
 };
 

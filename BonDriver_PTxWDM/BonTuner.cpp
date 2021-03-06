@@ -1,8 +1,10 @@
 //===========================================================================
 #include "stdafx.h"
+#include <process.h>
 #include <iterator>
 #include <cstdio>
 
+#include "../Common/PTxWDMCmdSrv.h"
 #include "BonTuner.h"
 //---------------------------------------------------------------------------
 
@@ -15,8 +17,9 @@ using namespace std;
 static CRITICAL_SECTION secBonTuners;
 static set<CBonTuner*> BonTuners ;
 static HANDLE hBonTunersMutex = NULL ;
-#define BONTUNERS_MUTEXNAME L"BonDriver_PTxWDM BonTuners Mutex"
-#define BONTUNER_STATIC_FORMAT L"BonDriver_PTxWDM-%c%d"
+#define BONTUNER_PREFIX L"BonDriver_PTxWDM"
+#define BONTUNERS_MUTEXNAME BONTUNER_PREFIX L" BonTuners Mutex"
+#define BONTUNER_STATIC_FORMAT BONTUNER_PREFIX L"-%c%d"
 
 //---------------------------------------------------------------------------
 void InitializeBonTuners(HMODULE hModule)
@@ -58,6 +61,12 @@ HMODULE CBonTuner::HModule = NULL;
 //---------------------------------------------------------------------------
 CBonTuner::CBonTuner()
 {
+	#ifdef _DEBUG
+	for(int i=0;i<77;i++)
+		DBGOUT("-");
+	DBGOUT("\n");
+	#endif
+
 	InitTunerProperty();
 }
 //---------------------------------------------------------------------------
@@ -68,19 +77,37 @@ CBonTuner::~CBonTuner()
 	::EnterCriticalSection(&secBonTuners);
 	BonTuners.erase(this);
 	::LeaveCriticalSection(&secBonTuners);
+
+	StopAsyncTsThread();
+	if(m_AsyncTSFifo) {
+		delete m_AsyncTSFifo;
+	}
 }
 //---------------------------------------------------------------------------
 void CBonTuner::InitTunerProperty()
 {
-
 	// 値を初期化
-	m_pcTuner = NULL;
+	m_CmdClient = NULL;
+	m_AsyncTSFifo = NULL;
+	m_bAsyncTsTerm = TRUE;
+	m_hAsyncTsThread = INVALID_HANDLE_VALUE;
 	m_hLnbMutex = NULL;
 	m_dwCurSpace = 0xFF;
 	m_dwCurChannel = 0xFF;
 	m_hasStream = FALSE;
 	m_hTunerMutex = NULL;
 	m_iTunerId = m_iTunerStaticId = -1;
+
+	// 非同期TS
+	DWORD ASYNCTSDATASIZE       = 48128UL                 ; // 非同期TSデータのサイズ
+	DWORD ASYNCTSQUEUENUM       = 66UL                    ; // 非同期TSデータの環状ストック数(初期値)
+	DWORD ASYNCTSQUEUEMAX       = 660UL                   ; // 非同期TSデータの環状ストック最大数
+	DWORD ASYNCTSEMPTYBORDER    = 22UL                    ; // 非同期TSデータの空きストック数底値閾値(アロケーション開始閾値)
+	DWORD ASYNCTSEMPTYLIMIT     = 11UL                    ; // 非同期TSデータの最低限確保する空きストック数(オーバーラップからの保障)
+	DWORD ASYNCTSTHREADWAIT     = 1000UL                  ; // 非同期TSスレッドキュー毎に待つ最大時間
+	int   ASYNCTSTHREADPRIORITY = THREAD_PRIORITY_HIGHEST ; // 非同期TSスレッドの優先度
+	BOOL  ASYNCTSALLOCWAITING   = FALSE                   ; // 非同期TSデータのアロケーションの完了を待つかどうか
+	int   ASYNCTSALLOCPRIORITY  = THREAD_PRIORITY_HIGHEST ; // 非同期TSアロケーションスレッドの優先度
 
 	// フラグの初期化
 	USELNB = FALSE;
@@ -108,6 +135,7 @@ void CBonTuner::InitTunerProperty()
 	char szMyName[_MAX_FNAME] ;
 	_splitpath_s( szMyPath, szMyDrive, _MAX_FNAME,szMyDir, _MAX_FNAME, szMyName, _MAX_FNAME, NULL, 0 ) ;
 	_strupr_s( szMyName, sizeof(szMyName) ) ;
+    m_strPath = string(szMyDrive)+string(szMyDir);
 
 	// ID を決定
 	int  id =-1 ;
@@ -134,14 +162,13 @@ void CBonTuner::InitTunerProperty()
 	m_InvisibleSpaces.clear() ;
 	m_InvalidSpaces.clear() ;
 	m_SpaceArrangement.clear() ;
-	LoadIniFile(string(szMyDrive)+string(szMyDir)+"BonDriver_PTxWDM.ini") ;
-	LoadIniFile(string(szMyDrive)+string(szMyDir)+string(szMyName)+".ini") ;
-
+	LoadIniFile(m_strPath+"BonDriver_PTxWDM.ini") ;
+	LoadIniFile(m_strPath+string(szMyName)+".ini") ;
 
 	// Channel ファイルをロード
-	if(!LoadChannelFile(string(szMyDrive)+string(szMyDir)+string(szMyName)+".ch.txt")) {
-	  if(!LoadChannelFile(string(szMyDrive)+string(szMyDir)+"BonDriver_PTxWDM-"+string(m_isISDBS?"S":"T")+".ch.txt")) {
-		if(!LoadChannelFile(string(szMyDrive)+string(szMyDir)+"BonDriver_PTxWDM.ch.txt")) {
+	if(!LoadChannelFile(m_strPath+string(szMyName)+".ch.txt")) {
+	  if(!LoadChannelFile(m_strPath+"BonDriver_PTxWDM-"+string(m_isISDBS?"S":"T")+".ch.txt")) {
+		if(!LoadChannelFile(m_strPath+"BonDriver_PTxWDM.ch.txt")) {
 		  InitChannelToDefault() ;
 		}
 	  }
@@ -149,6 +176,12 @@ void CBonTuner::InitTunerProperty()
 
 	// チャンネル情報再構築
 	RebuildChannels() ;
+
+	// 非同期FIFOバッファオブジェクト作成
+	m_AsyncTSFifo = new CAsyncFifo(
+		ASYNCTSQUEUENUM,ASYNCTSQUEUEMAX,ASYNCTSEMPTYBORDER,
+		ASYNCTSDATASIZE,ASYNCTSTHREADWAIT,ASYNCTSALLOCPRIORITY ) ;
+	m_AsyncTSFifo->SetEmptyLimit(ASYNCTSEMPTYLIMIT) ;
 
 	for(auto t=Elapsed();Elapsed(t)<3000;Sleep(50)) {
 		if(LoadTuner())  break ;
@@ -225,6 +258,17 @@ bool CBonTuner::LoadIniFile(string strIniFileName)
   LOADINT_SEC(DEFSPACE,CS110);
   LOADINT_SEC(DEFSPACE,CS110STREAMS);
   LOADINT_SEC(DEFSPACE,CS110STREAMSTRIDE);
+
+  LOADINT_SEC(ASYNCTS,DATASIZE) ;
+  LOADINT_SEC(ASYNCTS,QUEUENUM) ;
+  LOADINT_SEC(ASYNCTS,THREADWAIT) ;
+  LOADINT_SEC(ASYNCTS,THREADPRIORITY) ;
+  LOADINT_SEC(ASYNCTS,ALLOCWAITING) ;
+  LOADINT_SEC(ASYNCTS,ALLOCPRIORITY);
+  LOADINT_SEC(ASYNCTS,QUEUENUM) ;
+  LOADINT_SEC(ASYNCTS,QUEUEMAX) ;
+  LOADINT_SEC(ASYNCTS,EMPTYBORDER) ;
+  LOADINT_SEC(ASYNCTS,EMPTYLIMIT) ;
 
   #undef LOADINT64_SEC
   #undef LOADINT_SEC
@@ -473,78 +517,27 @@ void CBonTuner::RebuildChannels()
 //---------------------------------------------------------------------------
 const BOOL CBonTuner::SetRealChannel(const DWORD dwCh)
 {
-	const DWORD MAXDUR_FREQ = 1000; //周波数調整に費やす最大時間(msec)
-	const DWORD MAXDUR_TMCC = 1500; //TMCC取得に費やす最大時間(msec)
-	const DWORD MAXDUR_TSID = 3000; //TSID設定に費やす最大時間(msec)
-
-	if(!m_pcTuner) return FALSE ;
+	if(!m_CmdClient) return FALSE ;
 
 	//ストリーム一時停止
-	//is_channel_valid = FALSE;
-	m_pcTuner->SetStreamEnable(false);
+	StopAsyncTsThread();
+	m_CmdClient->CmdSetStreamEnable(FALSE);
 
 	if(dwCh >= m_Channels.size()) {
 		return FALSE;
 	}
 
 	//チューニング
-	bool tuned=false ;
-
-	do {
-
-		{
-			bool done=false ;
-			for (DWORD t=0,s=Elapsed(),n=0; t<MAXDUR_FREQ; t=Elapsed(s)) {
-				if(m_pcTuner->SetFrequency(m_Channels[dwCh].PtDrvChannel()))
-				{done=true;break;}
-			}
-			if(!done) break ;
-		}
-
-		Sleep(60);
-
-		if(m_Channels[dwCh].isISDBS()) {
-			WORD tsid = m_Channels[dwCh].TSID ;
-			WORD stream = m_Channels[dwCh].Stream ;
-			if(!tsid) {
-				for (DWORD t=0,s=Elapsed(); t<MAXDUR_TMCC; t=Elapsed(s)) {
-					TMCC_STATUS tmcc;
-					ZeroMemory(&tmcc,sizeof(tmcc));
-					//std::fill_n(tmcc.Id,8,0xffff) ;
-					if(m_pcTuner->GetTmcc(&tmcc)) {
-						for (int i=0; i<8; i++) {
-							WORD id = tmcc.u.bs.tsId[i]&0xffff;
-							if ((id&0xff00) && (id^0xffff)) {
-								if( (id&7) == stream ) { //ストリームに一致した
-									//一致したidに書き換える
-									tsid = id ;
-									break;
-								}
-							}
-						}
-						if(tsid&~7UL) break ;
-					}
-					Sleep(50);
-				}
-			}
-			if(!tsid) break ;
-			for (DWORD t=0,s=Elapsed(),n=0; t<MAXDUR_TSID ; t=Elapsed(s)) {
-				if(m_pcTuner->SetIdS(tsid)) { if(++n>=2) {tuned=true;break;} }
-				Sleep(50);
-			}
-		}else {
-			TMCC_STATUS tmcc;
-			for (DWORD t=0,s=Elapsed(); t<MAXDUR_TMCC; t=Elapsed(s)) {
-				if(m_pcTuner->GetTmcc(&tmcc)) {tuned=true;break;}
-				Sleep(50);
-			}
-		}
-
-	}while(0);
+	BOOL tuned = FALSE;
+	m_CmdClient->CmdSetChannel(
+		tuned, m_Channels[dwCh].PtDrvChannel(),
+		m_Channels[dwCh].TSID, m_Channels[dwCh].Stream ) ;
 
 	//ストリーム再開
-	//is_channel_valid = tuned ? TRUE : FALSE ;
-	if(tuned) m_pcTuner->SetStreamEnable(true);
+	if(tuned) {
+		if(m_CmdClient->CmdSetStreamEnable(TRUE))
+			StartAsyncTsThread();
+	}
 
 	if (SETCHDELAY)
 		Sleep(SETCHDELAY);
@@ -552,7 +545,7 @@ const BOOL CBonTuner::SetRealChannel(const DWORD dwCh)
 	// 撮り溜めたTSストリームの破棄
 	PurgeTsStream();
 
-	return tuned ? TRUE : FALSE ;
+	return tuned ;
 }
 //---------------------------------------------------------------------------
 BOOL CBonTuner::LoadTuner()
@@ -560,64 +553,82 @@ BOOL CBonTuner::LoadTuner()
 	if(hBonTunersMutex)
 		WaitForSingleObject(hBonTunersMutex , INFINITE);
 
+	WCHAR bonName[100];
+
+	string ctrl_exe = m_strPath + "PTxWDMCtrl.exe" ;
+	bool ctrl_exists = file_is_existed(ctrl_exe) ;
+
+	auto launch_ctrl = [&]() -> BOOL {
+		if(!file_is_existed(ctrl_exe)) return FALSE;
+		PROCESS_INFORMATION pi;
+		STARTUPINFOA si;
+		ZeroMemory(&si,sizeof(si));
+		si.cb=sizeof(si);
+		string cmdline = "\""+ctrl_exe+"\" "+wcs2mbcs(bonName);
+		BOOL bRet = CreateProcessA( NULL, (LPSTR)cmdline.c_str(), NULL
+			, NULL, FALSE, GetPriorityClass(GetCurrentProcess()), NULL, NULL, &si, &pi );
+		if(bRet) {
+			//WaitForInputIdle(pi.hProcess,INFINITE);
+			SetThreadPriority(pi.hThread,ASYNCTSTHREADPRIORITY);
+			DBGOUT("AUX Control program {%s} launched.\n", cmdline.c_str());
+		}
+		CloseHandle(pi.hThread);
+		CloseHandle(pi.hProcess);
+		return bRet ;
+	};
+
 	do {
 
 		int num = CPtDrvWrapper::TunerCount() ;
 		if(!num||num<=m_iTunerId) break ;
 
-		#if 0
-		if(num>=2) { // TEST
-		  auto a = new CPtDrvWrapper(0,0);
-		  auto b = new CPtDrvWrapper(0,1);
-		  auto c = new CPtDrvWrapper(1,0);
-		  auto d = new CPtDrvWrapper(1,1);
-		  LINEDEBUG;
-		  if( a->HandleAllocated() ) DBGOUT("A\n");
-		  if( b->HandleAllocated() ) DBGOUT("B\n");
-		  if( c->HandleAllocated() ) DBGOUT("C\n");
-		  if( d->HandleAllocated() ) DBGOUT("D\n");
-		  delete a; delete b; delete c; delete d;
-		}
-		#endif
-
-
-		if(m_iTunerId>=0) {
-			auto tuner = new CPtDrvWrapper(m_isISDBS,m_iTunerId) ;
-			if(!tuner->HandleAllocated()) {
-				delete tuner ;
+		if(m_iTunerId>=0) { // ID固定
+			swprintf_s(bonName,BONTUNER_STATIC_FORMAT,(m_isISDBS?L'S':L'T'),m_iTunerId) ;
+			if(HANDLE mutex = OpenMutex(MUTEX_ALL_ACCESS,FALSE,bonName)) {
+				CloseHandle(mutex);
 				if(!TRYSPARES) break ;
-			}
-			else {
-				m_pcTuner = tuner ;
-				m_iTunerStaticId = m_iTunerId;
+			}else {
+				auto client = new CPTxWDMCmdOperator(bonName);
+				if(!launch_ctrl()) client->Uniqulize(new CPTxWDMCmdServiceOperator(bonName));
+				if(!client->CmdOpenTuner(m_isISDBS,m_iTunerId)) {
+					delete client;
+					if(!TRYSPARES) break ;
+				}else {
+					m_CmdClient = client;
+					m_iTunerStaticId = m_iTunerId;
+					m_strTunerStaticName = bonName;
+					m_hTunerMutex = CreateMutex(NULL, TRUE, bonName);
+				}
 			}
 		}
-		if(!m_pcTuner) {
+
+		if(!m_CmdClient) { // ID自動割当
 			for(int i=0;i<num;i++) {
-				auto tuner = new CPtDrvWrapper(m_isISDBS,i) ;
-				if(!tuner->HandleAllocated())
-					delete tuner ;
-				else {
-					m_pcTuner = tuner ;
-					m_iTunerStaticId = i;
-					break;
+				swprintf_s(bonName,BONTUNER_STATIC_FORMAT,(m_isISDBS?L'S':L'T'),i) ;
+				if(HANDLE mutex = OpenMutex(MUTEX_ALL_ACCESS,FALSE,bonName)) {
+					CloseHandle(mutex);
+					continue ;
 				}
+				auto client = new CPTxWDMCmdOperator(bonName);
+				if(!launch_ctrl()) client->Uniqulize(new CPTxWDMCmdServiceOperator(bonName));
+				if(!client->CmdOpenTuner(m_isISDBS,i)) {
+					delete client;
+					continue;
+				}
+				m_CmdClient = client;
+				m_iTunerStaticId = i;
+				m_strTunerStaticName = bonName;
+				m_hTunerMutex = CreateMutex(NULL, TRUE, bonName);
+				break;
 			}
 		}
 
 	}while(0);
 
-	if(m_pcTuner!=NULL) {
-		WCHAR bonName[100];
-		swprintf_s(bonName,BONTUNER_STATIC_FORMAT,(m_isISDBS?L'S':L'T'),m_iTunerStaticId) ;
-		m_strTunerStaticName = bonName;
-		m_hTunerMutex = CreateMutex(NULL, TRUE, bonName);
-	}
-
 	if(hBonTunersMutex)
 		ReleaseMutex(hBonTunersMutex);
 
-	return m_pcTuner!=NULL ? TRUE : FALSE ;
+	return m_CmdClient !=NULL ? TRUE : FALSE ;
 }
 //---------------------------------------------------------------------------
 void CBonTuner::UnloadTuner()
@@ -625,25 +636,27 @@ void CBonTuner::UnloadTuner()
 	if(hBonTunersMutex)
 		WaitForSingleObject(hBonTunersMutex , INFINITE);
 
-	if(m_pcTuner) {
+	if(m_CmdClient) {
 		if(USELNB&&m_isISDBS) {
 			ChangeLnbPower(FALSE);
 		}
-		m_pcTuner->SetStreamEnable(false);
-		m_pcTuner->SetTunerSleep(true);
+		m_CmdClient->CmdSetStreamEnable(FALSE);
+		m_CmdClient->CmdSetTunerSleep(TRUE);
+		m_CmdClient->CmdTerminate();
 		if(m_hTunerMutex) {
 			ReleaseMutex(m_hTunerMutex);
 			CloseHandle(m_hTunerMutex);
 			m_hTunerMutex = NULL;
 		}
-		delete m_pcTuner ;
-		m_pcTuner = NULL ;
+		delete m_CmdClient ;
+		m_CmdClient = NULL ;
 	}
 	if(m_hLnbMutex) {
 		ReleaseMutex(m_hLnbMutex);
 		CloseHandle(m_hLnbMutex);
 		m_hLnbMutex = NULL;
 	}
+	m_iTunerStaticId = -1 ;
 
 	if(hBonTunersMutex)
 		ReleaseMutex(hBonTunersMutex);
@@ -652,7 +665,7 @@ void CBonTuner::UnloadTuner()
 //---------------------------------------------------------------------------
 const BOOL CBonTuner::ChangeLnbPower(BOOL power)
 {
-	if(!m_isISDBS||!m_pcTuner||m_iTunerStaticId<0) return FALSE ;
+	if(!m_isISDBS||!m_CmdClient||m_iTunerStaticId<0) return FALSE ;
 
 	wstring mutexFormat = L"BonDriver_PTxWDM LNB Power %d" ;
 	WCHAR wcsMutexName[100],wcsAnotherMutexName[100];
@@ -663,14 +676,14 @@ const BOOL CBonTuner::ChangeLnbPower(BOOL power)
 	if(power) {
 		if(!m_hLnbMutex) {
 			m_hLnbMutex = CreateMutex(NULL, TRUE, wcsMutexName);
-			m_pcTuner->SetLnbPower(BS_LNB_POWER_15V);
+			m_CmdClient->CmdSetLnbPower(TRUE);
 		}
 	}else {
 		if(m_hLnbMutex) {
 			//対のミューテックスを開いてLnb使用中か確認する
 			HANDLE hAnother = OpenMutex(MUTEX_ALL_ACCESS, FALSE, wcsAnotherMutexName);
 			if(!hAnother) {
-				m_pcTuner->SetLnbPower(BS_LNB_POWER_OFF);
+				m_CmdClient->CmdSetLnbPower(FALSE);
 			}else {
 				//対のチューナーがLnb電源供給中なので、電源OFFしない
 				CloseHandle(hAnother);
@@ -684,28 +697,115 @@ const BOOL CBonTuner::ChangeLnbPower(BOOL power)
 	return TRUE ;
 }
 //---------------------------------------------------------------------------
+int CBonTuner::AsyncTsThreadProcMain()
+{
+	CPTxWDMCmdServiceOperator *uniserver
+		= static_cast<CPTxWDMCmdServiceOperator*>(m_CmdClient->UniqueServer());
+
+	BUFFER<BYTE> buf(PTXWDMSTREAMER_PACKETSIZE);
+
+	DBGOUT("--- Start Client Streaming ---\n");
+
+	BOOL &terminated = m_bAsyncTsTerm ;
+
+	if(uniserver) {
+
+		while(!terminated) {
+			DWORD sz = uniserver->CurStreamSize();
+			if(!sz) {Sleep(10);continue;}
+			if(sz>buf.size()) sz=(DWORD)buf.size();
+			if(uniserver->GetStreamData(buf.data(),sz)) {
+				if(m_AsyncTSFifo->Push(buf.data(),sz,false,ASYNCTSALLOCWAITING?true:false))
+					m_evAsyncTsStream.set();
+			}
+		}
+
+		DBGOUT("--- Client UniServer Streaming Finished ---\n");
+
+	}else {
+
+		CPTxWDMStreamer streamer(m_strTunerStaticName+PTXWDMSTREAMER_SUFFIX,
+			TRUE,PTXWDMSTREAMER_PACKETSIZE,PTXWDMSTREAMER_PACKETNUM);
+
+		DWORD rem=0;
+		while(!terminated) {
+			DWORD wait_res = rem ? WAIT_OBJECT_0 : streamer.WaitForCmd(ASYNCTSTHREADWAIT);
+			if(wait_res==WAIT_TIMEOUT) continue;
+			if(wait_res==WAIT_OBJECT_0) {
+				DWORD sz=0;
+				if(streamer.Rx(buf.data(),sz,ASYNCTSTHREADWAIT)) {
+					if(m_AsyncTSFifo->Push(buf.data(),sz,false,ASYNCTSALLOCWAITING?true:false))
+						m_evAsyncTsStream.set();
+					if(!rem) rem=streamer.PacketRemain(ASYNCTSTHREADWAIT);
+					else rem--;
+				}
+			}else break;
+		}
+
+		DBGOUT("--- Client Streamer Finished ---\n");
+
+	}
+
+	return 0;
+}
+//---------------------------------------------------------------------------
+unsigned int __stdcall CBonTuner::AsyncTsThreadProc (PVOID pv)
+{
+	auto this_ = static_cast<CBonTuner*>(pv) ;
+	unsigned int result = this_->AsyncTsThreadProcMain() ;
+	_endthreadex(result) ;
+	return result;
+}
+//---------------------------------------------------------------------------
+void CBonTuner::StartAsyncTsThread()
+{
+	if(!m_AsyncTSFifo||!m_CmdClient) return;
+	auto &Thread = m_hAsyncTsThread;
+	if(Thread != INVALID_HANDLE_VALUE) return /*active*/;
+	Thread = (HANDLE)_beginthreadex(NULL, 0, AsyncTsThreadProc, this,
+		CREATE_SUSPENDED, NULL) ;
+	if(Thread != INVALID_HANDLE_VALUE) {
+		SetThreadPriority(Thread,ASYNCTSTHREADPRIORITY);
+		m_bAsyncTsTerm=FALSE;
+		::ResumeThread(Thread) ;
+	}
+}
+//---------------------------------------------------------------------------
+void CBonTuner::StopAsyncTsThread()
+{
+	if(!m_AsyncTSFifo||!m_CmdClient) return;
+	auto &Thread = m_hAsyncTsThread;
+	if(Thread == INVALID_HANDLE_VALUE) return /*inactive*/;
+	m_bAsyncTsTerm=TRUE;
+	if(::WaitForSingleObject(Thread,30000) != WAIT_OBJECT_0) {
+		::TerminateThread(Thread, 0);
+	}
+	Thread = INVALID_HANDLE_VALUE ;
+}
+//---------------------------------------------------------------------------
   // IBonDriver
 //-----
 const BOOL CBonTuner::OpenTuner(void)
 {
-	if(m_pcTuner) {
-		m_pcTuner->SetTunerSleep(false);
+	if(m_CmdClient) {
+		m_CmdClient->CmdSetTunerSleep(FALSE);
 		if(USELNB&&m_isISDBS) {
 			ChangeLnbPower(TRUE);
 		}
 	}
 
-	return m_pcTuner!=NULL ? TRUE : FALSE ;
+	return m_CmdClient!=NULL ? TRUE : FALSE ;
 }
 //-----
 void CBonTuner::CloseTuner(void)
 {
-	if(m_pcTuner) {
+	if(m_CmdClient) {
 		if(USELNB&&m_isISDBS) {
 			ChangeLnbPower(FALSE);
 		}
-		m_pcTuner->SetStreamEnable(false);
-		m_pcTuner->SetTunerSleep(true);
+		StopAsyncTsThread();
+		m_CmdClient->CmdSetStreamEnable(FALSE);
+		m_CmdClient->CmdSetTunerSleep(TRUE);
 	}
 }
 //-----
@@ -716,94 +816,69 @@ const BOOL CBonTuner::SetChannel(const BYTE bCh)
 //-----
 const float CBonTuner::GetSignalLevel(void)
 {
-	if(!m_pcTuner) return -1.f;
+	if(!m_CmdClient) return -1.f;
 	if(!m_hasStream) return 0.f;
 
-	UINT    cn100, curAgc, maxAgc;
-	m_pcTuner->GetCnAgc(&cn100, &curAgc, &maxAgc);
+	DWORD    cn100, curAgc, maxAgc;
+	m_CmdClient->CmdGetCnAgc(cn100, curAgc, maxAgc);
 
 	return cn100/100.f;
 }
 //-----
 const DWORD CBonTuner::WaitTsStream(const DWORD dwTimeOut)
 {
-	DWORD timeout = dwTimeOut ;
-	if(!timeout) timeout = 60000 * 5 ;
+	if(!m_AsyncTSFifo) return WAIT_ABANDONED;
 
-	if(!m_pcTuner) return WAIT_FAILED;
-	if(!m_hasStream) {
-		Sleep(timeout);
-		return WAIT_TIMEOUT;
+	if(!m_AsyncTSFifo->Empty()) return WAIT_OBJECT_0;
+
+	const DWORD dwRet = m_evAsyncTsStream.wait(dwTimeOut);
+
+	switch(dwRet){
+	case WAIT_ABANDONED:
+		return WAIT_ABANDONED;
+
+	case WAIT_OBJECT_0:
+	case WAIT_TIMEOUT:
+		return (m_CmdClient)? dwRet : WAIT_ABANDONED;
 	}
 
-	if(!m_pcTuner->IsStreamEnabled()){
-		m_pcTuner->SetStreamEnable(true);
-	}
-
-	for(DWORD s=Elapsed();Elapsed(s)<timeout;SleepEx(10,FALSE)) {
-		if(m_pcTuner->CurStreamSize())
-			return WAIT_OBJECT_0 ;
-	}
-	return WAIT_TIMEOUT;
+	return WAIT_FAILED;
 }
 //-----
 const DWORD CBonTuner::GetReadyCount(void)
 {
-	if(!m_hasStream) return 0;
-	return m_pcTuner ? m_pcTuner->CurStreamSize() : 0UL ;
+	if(!m_AsyncTSFifo) return 0;
+
+	return (DWORD)m_AsyncTSFifo->Size();
 }
 //-----
 const BOOL CBonTuner::GetTsStream(BYTE *pDst, DWORD *pdwSize, DWORD *pdwRemain)
 {
-	if(!m_pcTuner) return FALSE;
+	if(!m_CmdClient||!m_AsyncTSFifo) return FALSE;
 
-	if(!pdwSize) return FALSE ;
-	UINT size = *pdwSize ;
-	UINT outSz = 0 ;
-	*pdwSize=0;
+	BYTE *pSrc = NULL;
 
-	if(!m_hasStream) {
-		if(pdwRemain) *pdwRemain = 0 ;
+	if(GetTsStream(&pSrc, pdwSize, pdwRemain)){
+		if(*pdwSize&&pSrc)
+			CopyMemory(pDst, pSrc, *pdwSize);
 		return TRUE;
 	}
 
-	if(!m_pcTuner->IsStreamEnabled()){
-		m_pcTuner->SetStreamEnable(true);
-	}
-
-	if(!m_pcTuner->GetStreamData(pDst,size,&outSz))
-		return FALSE ;
-
-	if(pdwRemain) *pdwRemain = m_pcTuner->CurStreamSize();
-
-	*pdwSize = outSz;
-	return (outSz!=0)? TRUE: FALSE;
+	return FALSE;
 }
 //-----
 const BOOL CBonTuner::GetTsStream(BYTE **ppDst, DWORD *pdwSize, DWORD *pdwRemain)
 {
-	if(!m_pcTuner) return FALSE;
+	if(!m_CmdClient||!m_AsyncTSFifo) return FALSE;
 
-	DWORD sz = m_pcTuner->CurStreamSize() ;
-
-	if(!sz) return FALSE ;
-
-	tmpBuf.resize(sz) ;
-
-	if(pdwSize) *pdwSize = sz ;
-
-	if(GetTsStream(tmpBuf.data(),pdwSize,pdwRemain)) {
-		*ppDst = tmpBuf.data() ;
-		return TRUE ;
-	}
-	return FALSE ;
+	m_AsyncTSFifo->Pop(ppDst,pdwSize,pdwRemain) ;
+    return TRUE;
 }
 //-----
 void CBonTuner::PurgeTsStream(void)
 {
-	if(!m_pcTuner) return;
-
-	m_pcTuner->PurgeStream();
+	if(m_CmdClient) m_CmdClient->CmdPurgeStream();
+	if(m_AsyncTSFifo) m_AsyncTSFifo->Purge() ;
 }
 //-----
 void CBonTuner::Release(void)
@@ -820,7 +895,7 @@ LPCTSTR CBonTuner::GetTunerName(void)
 //-----
 const BOOL CBonTuner::IsTunerOpening(void)
 {
-	return m_pcTuner ? TRUE : FALSE ;
+	return m_CmdClient ? TRUE : FALSE ;
 }
 //-----
 LPCTSTR CBonTuner::EnumTuningSpace(const DWORD dwSpace)
@@ -880,27 +955,13 @@ const DWORD CBonTuner::GetCurChannel(void)
 //-----
 const DWORD CBonTuner::GetTotalDeviceNum(void)
 {
-#if 1 // １プロセス１チューナー
-
-	return 1;
-
-#else // １プロセス多チューナー（未対応）
-
 	if(m_iTunerId>=0) return 1;
 	return CPtDrvWrapper::TunerCount();
-
-#endif
 }
 //-----
 const DWORD CBonTuner::GetActiveDeviceNum(void)
 {
-#if 1 // １プロセス１チューナー
-
-	return m_pcTuner? 1: 0;
-
-#else // １プロセス多チューナー（未対応）
-
-	if(m_iTunerId>=0) return m_pcTuner?1:0;
+	if(m_iTunerId>=0) return m_CmdClient?1:0;
 	int num = CPtDrvWrapper::TunerCount() ;
 	int act = 0 ;
 
@@ -913,8 +974,6 @@ const DWORD CBonTuner::GetActiveDeviceNum(void)
 	}
 
 	return act ;
-
-#endif
 }
 //-----
 const BOOL CBonTuner::SetLnbPower(const BOOL bEnable)

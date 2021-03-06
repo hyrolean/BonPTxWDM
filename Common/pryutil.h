@@ -107,7 +107,7 @@ private:
   HANDLE event ;
   std::wstring name ;
 public:
-  event_object(BOOL _InitialState=TRUE/*default:signalized*/,std::wstring _name=L"") ;
+  event_object(BOOL initialState_=TRUE/*default:signalized*/,std::wstring name_=L"",BOOL security_=FALSE) ;
   event_object(const event_object &clone_source) ; // 現スレッドでイベントを複製
   ~event_object() ;
   std::wstring event_name() const { return name ; }
@@ -585,6 +585,32 @@ public:
   void SetModerateAllocating(bool Moderate) { ModerateAllocating=Moderate ; }
   void SetEmptyLimit(size_t emptyLimit) { EmptyLimit = min(emptyLimit,EmptyBorder) ; }
   bool WaitForAllocation() ;
+};
+
+
+  // CSharedMemory (プロセス間メモリ共有)
+
+class CSharedMemory
+{
+private:
+	std::wstring BaseName;
+	HANDLE HMutex;
+	HANDLE HMapping;
+	LPVOID PMapView;
+	DWORD SzMapView;
+protected:
+    LPVOID Memory() const { return PMapView; }
+	bool Lock(DWORD timeout = INFINITE) const ;
+    bool Unlock() const ;
+protected:
+	CSharedMemory(std::wstring name, DWORD size);
+	virtual ~CSharedMemory();
+public:
+	std::wstring Name() const { return BaseName; }
+	virtual bool IsValid() const ;
+	virtual DWORD Read(LPVOID *dst, DWORD sz, DWORD pos, DWORD timeout=INFINITE) const ;
+	virtual DWORD Write(const LPVOID *src, DWORD sz, DWORD pos, DWORD timeout=INFINITE);
+	DWORD Size() const { return SzMapView; }
 };
 
 //---------------------------------------------------------------------------

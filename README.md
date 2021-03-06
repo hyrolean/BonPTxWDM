@@ -7,11 +7,12 @@ BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se5
   BonDriver_PTxWDM-T.dll ← BonPTxWDM 地デジ 複合チューナー T側ID自動判別 (BonDriver_PTxWDM.dllをリネームしたもの)
   BonDriver_PTxWDM.ini ← BonPTxWDM 用設定ファイル
   BonDriver_PTxWDM.ch.txt ← BonPTxWDM 用チャンネルファイル (配置しなくてもおｋ)
+  PTxWDMCtrl.exe ← Spinelなどのプロクシソフト配下で使用する場合に配置 (１プロセス多チューナー構成)
   ```
 
-  **※初見サンプルです。 無保証( NO WARRANTY )です。 お取り扱いには、十分にご注意ください。**
-  
-  
+  **※α版サンプルです。 無保証( NO WARRANTY )です。 お取り扱いには、十分にご注意ください。**
+
+
 ## TODO
 - [x] EDCB/TVTest配下での動作(１プロセス１チューナー構成)
-- [ ] Spinelなどのプロクシソフト配下での複数のチューナーを同時使用出来ない問題の解決(１プロセス多チューナー構成)
+- [x] Spinelなどのプロクシソフト配下での動作(１プロセス多チューナー構成)
