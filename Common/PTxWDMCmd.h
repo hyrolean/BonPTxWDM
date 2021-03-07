@@ -28,10 +28,20 @@ enum PTXWDMCMD : DWORD {
 	PTXWDMCMD_SET_LNB_POWER,
 	PTXWDMCMD_GET_CN_AGC,
 	PTXWDMCMD_PURGE_STREAM,
+	PTXWDMCMD_SETUP_SERVER,
 };
 
 struct TSIDLIST {
 	DWORD Id[8];
+};
+
+struct SERVER_SETTINGS {
+  DWORD dwSize;
+  DWORD CtrlPackets;
+  int StreamerThreadPriority;
+  DWORD MAXDUR_FREQ;
+  DWORD MAXDUR_TMCC;
+  DWORD MAXDUR_TSID;
 };
 
   // CPTxWDMCmdOperator (PTxWDM Command Operator)
@@ -72,6 +82,7 @@ public:
 	BOOL CmdSetLnbPower(BOOL Power, DWORD timeout=PTXWDMCMDTIMEOUT);
 	BOOL CmdGetCnAgc(DWORD &Cn100, DWORD &CurAgc, DWORD &MaxAgc, DWORD timeout=PTXWDMCMDTIMEOUT);
 	BOOL CmdPurgeStream(DWORD timeout=PTXWDMCMDTIMEOUT);
+	BOOL CmdSetupServer(const SERVER_SETTINGS *Options, DWORD timeout=PTXWDMCMDTIMEOUT);
 protected:
 	// for Server Operations
 	virtual BOOL ResTerminate()	{ return FALSE ; }
@@ -89,6 +100,7 @@ protected:
 	virtual BOOL ResSetLnbPower(BOOL Power)	{ return FALSE ; }
 	virtual BOOL ResGetCnAgc(DWORD &Cn100, DWORD &CurAgc, DWORD &MaxAgc)	{ return FALSE ; }
 	virtual BOOL ResPurgeStream()	{ return FALSE ; }
+	virtual BOOL ResSetupServer(const SERVER_SETTINGS *Options)	{ return FALSE ; }
 public:
 	// Service Reaction ( It will be called from the server after Listen() )
 	BOOL ServiceReaction(DWORD timeout=PTXWDMCMDTIMEOUT);
@@ -102,7 +114,7 @@ public:
 
 	#define PTXWDMSTREAMER_SUFFIX	    L"_Stream"
 	#define PTXWDMSTREAMER_PACKETSIZE	64*1024
-	#define PTXWDMSTREAMER_PACKETNUM	8
+	#define PTXWDMSTREAMER_DEFPACKETNUM	8
 
 class CPTxWDMStreamer : public CSharedPacketStreamer
 {

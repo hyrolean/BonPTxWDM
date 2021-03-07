@@ -21,6 +21,8 @@ static HANDLE hBonTunersMutex = NULL ;
 #define BONTUNERS_MUTEXNAME BONTUNER_PREFIX L" BonTuners Mutex"
 #define BONTUNER_STATIC_FORMAT BONTUNER_PREFIX L"-%c%d"
 
+#define PTXWDMCTRL_EXE "PTxWDMCtrl.exe"
+
 //---------------------------------------------------------------------------
 void InitializeBonTuners(HMODULE hModule)
 {
@@ -99,15 +101,16 @@ void CBonTuner::InitTunerProperty()
 	m_iTunerId = m_iTunerStaticId = -1;
 
 	// 非同期TS
-	DWORD ASYNCTSDATASIZE       = 48128UL                 ; // 非同期TSデータのサイズ
-	DWORD ASYNCTSQUEUENUM       = 66UL                    ; // 非同期TSデータの環状ストック数(初期値)
-	DWORD ASYNCTSQUEUEMAX       = 660UL                   ; // 非同期TSデータの環状ストック最大数
-	DWORD ASYNCTSEMPTYBORDER    = 22UL                    ; // 非同期TSデータの空きストック数底値閾値(アロケーション開始閾値)
-	DWORD ASYNCTSEMPTYLIMIT     = 11UL                    ; // 非同期TSデータの最低限確保する空きストック数(オーバーラップからの保障)
-	DWORD ASYNCTSTHREADWAIT     = 1000UL                  ; // 非同期TSスレッドキュー毎に待つ最大時間
-	int   ASYNCTSTHREADPRIORITY = THREAD_PRIORITY_HIGHEST ; // 非同期TSスレッドの優先度
-	BOOL  ASYNCTSALLOCWAITING   = FALSE                   ; // 非同期TSデータのアロケーションの完了を待つかどうか
-	int   ASYNCTSALLOCPRIORITY  = THREAD_PRIORITY_HIGHEST ; // 非同期TSアロケーションスレッドの優先度
+	ASYNCTSPACKETSIZE         = 48128UL                 ; // 非同期TSデータのパケットサイズ
+	ASYNCTSQUEUENUM           = 66UL                    ; // 非同期TSデータの環状ストック数(初期値)
+	ASYNCTSQUEUEMAX           = 660UL                   ; // 非同期TSデータの環状ストック最大数
+	ASYNCTSEMPTYBORDER        = 22UL                    ; // 非同期TSデータの空きストック数底値閾値(アロケーション開始閾値)
+	ASYNCTSEMPTYLIMIT         = 11UL                    ; // 非同期TSデータの最低限確保する空きストック数(オーバーラップからの保障)
+	ASYNCTSRECVTHREADWAIT     = 250UL                   ; // 非同期TSスレッドキュー毎に待つ最大時間
+	ASYNCTSRECVTHREADPRIORITY = THREAD_PRIORITY_HIGHEST ; // 非同期TSスレッドの優先度
+	ASYNCTSFIFOALLOCWAITING   = FALSE                   ; // 非同期TSデータのアロケーションの完了を待つかどうか
+	ASYNCTSFIFOTHREADWAIT     = 1000UL                  ; // 非同期TSデータのアロケーションの監視毎時間
+	ASYNCTSFIFOTHREADPRIORITY = THREAD_PRIORITY_HIGHEST ; // 非同期TSアロケーションスレッドの優先度
 
 	// フラグの初期化
 	USELNB = FALSE;
@@ -115,6 +118,10 @@ void CBonTuner::InitTunerProperty()
 	FASTSCAN = FALSE;
 	TRYSPARES = FALSE;
 	SETCHDELAY = 0;
+	CTRLPACKETS = PTXWDMSTREAMER_DEFPACKETNUM;
+	MAXDUR_FREQ = 1000; //周波数調整に費やす最大時間(msec)
+	MAXDUR_TMCC = 1500; //TMCC取得に費やす最大時間(msec)
+	MAXDUR_TSID = 3000; //TSID設定に費やす最大時間(msec)
 
 	// 既定のチャンネル情報を初期化
 	//DEFSPACEVHF               = FALSE ; // VHFを含めるかどうか
@@ -180,7 +187,7 @@ void CBonTuner::InitTunerProperty()
 	// 非同期FIFOバッファオブジェクト作成
 	m_AsyncTSFifo = new CAsyncFifo(
 		ASYNCTSQUEUENUM,ASYNCTSQUEUEMAX,ASYNCTSEMPTYBORDER,
-		ASYNCTSDATASIZE,ASYNCTSTHREADWAIT,ASYNCTSALLOCPRIORITY ) ;
+		ASYNCTSPACKETSIZE,ASYNCTSFIFOTHREADWAIT,ASYNCTSFIFOTHREADPRIORITY ) ;
 	m_AsyncTSFifo->SetEmptyLimit(ASYNCTSEMPTYLIMIT) ;
 
 	for(auto t=Elapsed();Elapsed(t)<3000;Sleep(50)) {
@@ -232,6 +239,10 @@ bool CBonTuner::LoadIniFile(string strIniFileName)
   LOADINT(TRYSPARES);
   LOADINT(FASTSCAN);
   LOADINT(SETCHDELAY);
+  LOADINT(CTRLPACKETS);
+  LOADINT(MAXDUR_FREQ);
+  LOADINT(MAXDUR_TMCC);
+  LOADINT(MAXDUR_TSID);
 
   Section = "DEFSPACE" ;
   wstring InvisibleSpaces ;
@@ -259,16 +270,16 @@ bool CBonTuner::LoadIniFile(string strIniFileName)
   LOADINT_SEC(DEFSPACE,CS110STREAMS);
   LOADINT_SEC(DEFSPACE,CS110STREAMSTRIDE);
 
-  LOADINT_SEC(ASYNCTS,DATASIZE) ;
-  LOADINT_SEC(ASYNCTS,QUEUENUM) ;
-  LOADINT_SEC(ASYNCTS,THREADWAIT) ;
-  LOADINT_SEC(ASYNCTS,THREADPRIORITY) ;
-  LOADINT_SEC(ASYNCTS,ALLOCWAITING) ;
-  LOADINT_SEC(ASYNCTS,ALLOCPRIORITY);
-  LOADINT_SEC(ASYNCTS,QUEUENUM) ;
-  LOADINT_SEC(ASYNCTS,QUEUEMAX) ;
-  LOADINT_SEC(ASYNCTS,EMPTYBORDER) ;
-  LOADINT_SEC(ASYNCTS,EMPTYLIMIT) ;
+  LOADINT_SEC(ASYNCTS,PACKETSIZE);
+  LOADINT_SEC(ASYNCTS,QUEUENUM);
+  LOADINT_SEC(ASYNCTS,QUEUEMAX);
+  LOADINT_SEC(ASYNCTS,EMPTYBORDER);
+  LOADINT_SEC(ASYNCTS,EMPTYLIMIT);
+  LOADINT_SEC(ASYNCTS,RECVTHREADWAIT);
+  LOADINT_SEC(ASYNCTS,RECVTHREADPRIORITY);
+  LOADINT_SEC(ASYNCTS,FIFOALLOCWAITING);
+  LOADINT_SEC(ASYNCTS,FIFOTHREADWAIT);
+  LOADINT_SEC(ASYNCTS,FIFOTHREADPRIORITY);
 
   #undef LOADINT64_SEC
   #undef LOADINT_SEC
@@ -555,7 +566,7 @@ BOOL CBonTuner::LoadTuner()
 
 	WCHAR bonName[100];
 
-	string ctrl_exe = m_strPath + "PTxWDMCtrl.exe" ;
+	string ctrl_exe = m_strPath + PTXWDMCTRL_EXE ;
 	bool ctrl_exists = file_is_existed(ctrl_exe) ;
 
 	auto launch_ctrl = [&]() -> BOOL {
@@ -568,8 +579,7 @@ BOOL CBonTuner::LoadTuner()
 		BOOL bRet = CreateProcessA( NULL, (LPSTR)cmdline.c_str(), NULL
 			, NULL, FALSE, GetPriorityClass(GetCurrentProcess()), NULL, NULL, &si, &pi );
 		if(bRet) {
-			//WaitForInputIdle(pi.hProcess,INFINITE);
-			SetThreadPriority(pi.hThread,ASYNCTSTHREADPRIORITY);
+			//SetThreadPriority(pi.hThread,ASYNCTSRECVTHREADPRIORITY);
 			DBGOUT("AUX Control program {%s} launched.\n", cmdline.c_str());
 		}
 		CloseHandle(pi.hThread);
@@ -624,6 +634,18 @@ BOOL CBonTuner::LoadTuner()
 		}
 
 	}while(0);
+
+	if( m_CmdClient ) {
+		SERVER_SETTINGS SrvOpt;
+		SrvOpt.dwSize = sizeof(SERVER_SETTINGS);
+		SrvOpt.CtrlPackets = CTRLPACKETS ;
+		SrvOpt.StreamerThreadPriority = ASYNCTSRECVTHREADPRIORITY ;
+		SrvOpt.MAXDUR_FREQ = MAXDUR_FREQ ;
+		SrvOpt.MAXDUR_TMCC = MAXDUR_TMCC ;
+		SrvOpt.MAXDUR_TSID = MAXDUR_TSID ;
+		if(!m_CmdClient->CmdSetupServer(&SrvOpt))
+			MessageBeep(MB_ICONEXCLAMATION);
+	}
 
 	if(hBonTunersMutex)
 		ReleaseMutex(hBonTunersMutex);
@@ -715,7 +737,7 @@ int CBonTuner::AsyncTsThreadProcMain()
 			if(!sz) {Sleep(10);continue;}
 			if(sz>buf.size()) sz=(DWORD)buf.size();
 			if(uniserver->GetStreamData(buf.data(),sz)) {
-				if(m_AsyncTSFifo->Push(buf.data(),sz,false,ASYNCTSALLOCWAITING?true:false))
+				if(m_AsyncTSFifo->Push(buf.data(),sz,false,ASYNCTSFIFOALLOCWAITING?true:false))
 					m_evAsyncTsStream.set();
 			}
 		}
@@ -725,18 +747,18 @@ int CBonTuner::AsyncTsThreadProcMain()
 	}else {
 
 		CPTxWDMStreamer streamer(m_strTunerStaticName+PTXWDMSTREAMER_SUFFIX,
-			TRUE,PTXWDMSTREAMER_PACKETSIZE,PTXWDMSTREAMER_PACKETNUM);
+			TRUE,PTXWDMSTREAMER_PACKETSIZE,CTRLPACKETS);
 
 		DWORD rem=0;
 		while(!terminated) {
-			DWORD wait_res = rem ? WAIT_OBJECT_0 : streamer.WaitForCmd(ASYNCTSTHREADWAIT);
+			DWORD wait_res = rem ? WAIT_OBJECT_0 : streamer.WaitForCmd(ASYNCTSRECVTHREADWAIT);
 			if(wait_res==WAIT_TIMEOUT) continue;
 			if(wait_res==WAIT_OBJECT_0) {
 				DWORD sz=0;
-				if(streamer.Rx(buf.data(),sz,ASYNCTSTHREADWAIT)) {
-					if(m_AsyncTSFifo->Push(buf.data(),sz,false,ASYNCTSALLOCWAITING?true:false))
+				if(streamer.Rx(buf.data(),sz,ASYNCTSRECVTHREADWAIT)) {
+					if(m_AsyncTSFifo->Push(buf.data(),sz,false,ASYNCTSFIFOALLOCWAITING?true:false))
 						m_evAsyncTsStream.set();
-					if(!rem) rem=streamer.PacketRemain(ASYNCTSTHREADWAIT);
+					if(!rem) rem=streamer.PacketRemain(ASYNCTSRECVTHREADWAIT);
 					else rem--;
 				}
 			}else break;
@@ -765,7 +787,7 @@ void CBonTuner::StartAsyncTsThread()
 	Thread = (HANDLE)_beginthreadex(NULL, 0, AsyncTsThreadProc, this,
 		CREATE_SUSPENDED, NULL) ;
 	if(Thread != INVALID_HANDLE_VALUE) {
-		SetThreadPriority(Thread,ASYNCTSTHREADPRIORITY);
+		SetThreadPriority(Thread,ASYNCTSRECVTHREADPRIORITY);
 		m_bAsyncTsTerm=FALSE;
 		::ResumeThread(Thread) ;
 	}
@@ -956,12 +978,23 @@ const DWORD CBonTuner::GetCurChannel(void)
 const DWORD CBonTuner::GetTotalDeviceNum(void)
 {
 	if(m_iTunerId>=0) return 1;
+	if(m_CmdClient) {
+		CPTxWDMCmdServiceOperator *uniserver
+			= static_cast<CPTxWDMCmdServiceOperator*>(m_CmdClient->UniqueServer());
+		if(uniserver) return 1;
+	}else if(!file_is_existed(m_strPath+PTXWDMCTRL_EXE)) return 1;
 	return CPtDrvWrapper::TunerCount();
 }
 //-----
 const DWORD CBonTuner::GetActiveDeviceNum(void)
 {
 	if(m_iTunerId>=0) return m_CmdClient?1:0;
+	if(m_CmdClient) {
+		CPTxWDMCmdServiceOperator *uniserver
+			= static_cast<CPTxWDMCmdServiceOperator*>(m_CmdClient->UniqueServer());
+		if(uniserver) return 1;
+	}else if(!file_is_existed(m_strPath+PTXWDMCTRL_EXE)) return 0;
+
 	int num = CPtDrvWrapper::TunerCount() ;
 	int act = 0 ;
 

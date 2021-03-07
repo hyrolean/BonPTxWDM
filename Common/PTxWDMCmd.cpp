@@ -186,6 +186,16 @@ BOOL CPTxWDMCmdOperator::CmdPurgeStream(DWORD timeout)
 	return op.res;
 }
 //---------------------------------------------------------------------------
+BOOL CPTxWDMCmdOperator::CmdSetupServer(const SERVER_SETTINGS *Options, DWORD timeout)
+{
+	OP op;
+	if(!Options||Options->dwSize>sizeof(op.data)) return FALSE ;
+	op.cmd = PTXWDMCMD_SETUP_SERVER ;
+	CopyMemory(&op.data[0],Options,Options->dwSize);
+	if(!Xfer(op,op,timeout)) return FALSE;
+	return op.res;
+}
+//---------------------------------------------------------------------------
 BOOL CPTxWDMCmdOperator::ServiceReaction(DWORD timeout)
 {
 	if(!ServerMode) return FALSE;
@@ -248,6 +258,9 @@ BOOL CPTxWDMCmdOperator::ServiceReaction(DWORD timeout)
     case PTXWDMCMD_PURGE_STREAM:
 		res.res = ResPurgeStream();
 		break;
+	case PTXWDMCMD_SETUP_SERVER:
+		res.res = ResSetupServer(reinterpret_cast<SERVER_SETTINGS*>(&cmd.data[0]));
+		break;
 	default:
 		result = res.res = FALSE ;
 	}
@@ -266,7 +279,7 @@ BOOL CPTxWDMCmdOperator::Uniqulize(CPTxWDMCmdOperator *server)
 	}
 	if( !ServerMode && server->ServerMode && Name()==server->Name() ) {
 		UniServer=server;
-		DBGOUT("Enter the UniServer mode.\n");
+		DBGOUT("--- Enter the UniServer mode ---\n");
 		return TRUE ;
 	}
 	return FALSE ;

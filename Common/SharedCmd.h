@@ -39,7 +39,7 @@ protected:
 	DWORD CurPacketSend, CurPacketRecv; // FIFO streaming cursor
 	BOOL FReceiver; // TRUE: Receiver, FALSE: Transimitter
 	DWORD PosPackets;  // Position of begining packets
-	HANDLE *PacketMutex;
+	HANDLE *PacketMutex; // Mutexes for locking packets
 	bool LockPacket(DWORD index, DWORD timeout = INFINITE) const ;
 	bool UnlockPacket(DWORD index) const ;
 public:

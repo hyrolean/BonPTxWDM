@@ -35,7 +35,7 @@ class CPTxWDMService
 {
 private:
 	CPTxWDMCmdServiceOperator	Op;
-	CPTxWDMStreamer				St;
+	CPTxWDMStreamer				*St;
 	CAsyncFifo					Fifo;
 	DWORD Timeout;
 	HANDLE Thread;
@@ -49,10 +49,10 @@ private:
 			if(!sz) {Sleep(10);continue;}
 			if(sz>buf.size()) sz=(DWORD)buf.size();
 			if(Op.GetStreamData(buf.data()+pos,sz)) {
-				if(Fifo.Push(buf.data(),sz,false,false)) {
+				if(Fifo.Push(buf.data(),sz,false)) {
 					BYTE *data; DWORD len,rem;
 					if(Fifo.Pop(&data,&len,&rem))
-						St.Tx(data,len,Timeout);
+						St->Tx(data,len,Timeout);
 				}
 			}
 		}
@@ -68,20 +68,21 @@ private:
 public:
 	CPTxWDMService(wstring name, DWORD timeout=INFINITE)
 	 :	Op( name ), Thread(INVALID_HANDLE_VALUE), ThTerm(TRUE),
-		St( name+PTXWDMSTREAMER_SUFFIX, FALSE,
-			PTXWDMSTREAMER_PACKETSIZE, PTXWDMSTREAMER_PACKETNUM ),
-		Fifo(2,2,0,PTXWDMSTREAMER_PACKETSIZE)
+		St( NULL ), Fifo(2,2,0,PTXWDMSTREAMER_PACKETSIZE)
 	{ Timeout = timeout ; }
 	~CPTxWDMService() { StopStreaming(); }
 	CPTxWDMCmdServiceOperator	*Operator()	{ return &Op; }
-	CPTxWDMStreamer				*Streamer()	{ return &St; }
+	CPTxWDMStreamer				*Streamer()	{ return St; }
 	void StartStreaming() {
 		if(Thread != INVALID_HANDLE_VALUE) return /*active*/;
 		Thread = (HANDLE)_beginthreadex(NULL, 0, StreamingThreadProc, this,
 			CREATE_SUSPENDED, NULL) ;
 		if(Thread != INVALID_HANDLE_VALUE) {
+			if(St) delete St;
+			St = new CPTxWDMStreamer( Op.Name()+PTXWDMSTREAMER_SUFFIX, FALSE,
+				PTXWDMSTREAMER_PACKETSIZE, Op.CtrlPackets() );
 			DBGOUT("-- Start Streaming --\n");
-			::SetThreadPriority(Thread,GetThreadPriority(GetCurrentThread()));
+			::SetThreadPriority( Thread, Op.StreamerThreadPriority() );
 			ThTerm=FALSE;
 			::ResumeThread(Thread) ;
 		}else {
@@ -96,6 +97,7 @@ public:
 		}
 		Thread = INVALID_HANDLE_VALUE ;
 		Fifo.Purge();
+		if(St) { delete St; St=NULL; }
 		DBGOUT("-- Stop Streaming --\n");
 	}
 };
@@ -119,8 +121,8 @@ int MainLoop(wstring name)
 
 			if(enable_streaming != service.Operator()->StreamingEnabled()) {
 				enable_streaming = service.Operator()->StreamingEnabled() ;
-				if(enable_streaming) service.StartStreaming();
-				else service.StopStreaming();
+				if(enable_streaming)	service.StartStreaming();
+				else					service.StopStreaming();
 			}
 
 		}else if(wait_res==WAIT_TIMEOUT) {

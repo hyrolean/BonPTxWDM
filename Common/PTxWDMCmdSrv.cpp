@@ -17,6 +17,12 @@ CPTxWDMCmdServiceOperator::CPTxWDMCmdServiceOperator(wstring name)
 	Tuner_ = NULL ;
 	Terminated_ = FALSE ;
 	StreamingEnabled_ = FALSE ;
+	Settings_.dwSize = sizeof(Settings_);
+	Settings_.CtrlPackets = PTXWDMSTREAMER_DEFPACKETNUM ;
+	Settings_.StreamerThreadPriority = THREAD_PRIORITY_HIGHEST ;
+	Settings_.MAXDUR_FREQ = 1000; //Žü”g”’²®‚É”ï‚â‚·Å‘åŽžŠÔ(msec)
+	Settings_.MAXDUR_TMCC = 1500; //TMCCŽæ“¾‚É”ï‚â‚·Å‘åŽžŠÔ(msec)
+	Settings_.MAXDUR_TSID = 3000; //TSIDÝ’è‚É”ï‚â‚·Å‘åŽžŠÔ(msec)
 	KeepAlive();
 }
 //---------------------------------------------------------------------------
@@ -116,9 +122,9 @@ BOOL CPTxWDMCmdServiceOperator::ResSetChannel(BOOL &Tuned, DWORD Freq,
 	KeepAlive();
 	if(!Tuner_) return FALSE ;
 
-	const DWORD MAXDUR_FREQ = 1000; //Žü”g”’²®‚É”ï‚â‚·Å‘åŽžŠÔ(msec)
-	const DWORD MAXDUR_TMCC = 1500; //TMCCŽæ“¾‚É”ï‚â‚·Å‘åŽžŠÔ(msec)
-	const DWORD MAXDUR_TSID = 3000; //TSIDÝ’è‚É”ï‚â‚·Å‘åŽžŠÔ(msec)
+	const DWORD MAXDUR_FREQ = Settings_.MAXDUR_FREQ; //Žü”g”’²®‚É”ï‚â‚·Å‘åŽžŠÔ(msec)
+	const DWORD MAXDUR_TMCC = Settings_.MAXDUR_TMCC; //TMCCŽæ“¾‚É”ï‚â‚·Å‘åŽžŠÔ(msec)
+	const DWORD MAXDUR_TSID = Settings_.MAXDUR_TSID; //TSIDÝ’è‚É”ï‚â‚·Å‘åŽžŠÔ(msec)
 
 	//ƒ`ƒ…[ƒjƒ“ƒO
 	bool tuned=false ;
@@ -259,6 +265,18 @@ BOOL CPTxWDMCmdServiceOperator::ResPurgeStream()
 	if(Tuner_) {
 		if(Tuner_->PurgeStream())
 			return TRUE;
+	}
+	return FALSE;
+}
+//---------------------------------------------------------------------------
+BOOL CPTxWDMCmdServiceOperator::ResSetupServer(const SERVER_SETTINGS *Options)
+{
+	exclusive_lock lock(&Critical_);
+	KeepAlive();
+	if(Options->dwSize<=sizeof(SERVER_SETTINGS)) {
+		CopyMemory(&Settings_,Options,Options->dwSize);
+		Settings_.dwSize = sizeof(Settings_);
+		return TRUE ;
 	}
 	return FALSE;
 }

@@ -619,15 +619,15 @@ event_object::event_object(BOOL initialState_,wstring name_,BOOL security_)
   SECURITY_ATTRIBUTES sa,*psa=NULL;
   SECURITY_DESCRIPTOR sd;
   if(security_) {
-	ZeroMemory(&sd,sizeof sd);
-	if(InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION)) {
-	  if(SetSecurityDescriptorDacl(&sd, TRUE, NULL, FALSE)) {
-		ZeroMemory(&sa,sizeof sa);
-		sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-		sa.bInheritHandle = FALSE;
-		sa.lpSecurityDescriptor = &sd;
-		psa = &sa;
-	  }
+    ZeroMemory(&sd,sizeof sd);
+    if(InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION)) {
+      if(SetSecurityDescriptorDacl(&sd, TRUE, NULL, FALSE)) {
+        ZeroMemory(&sa,sizeof sa);
+        sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+        sa.bInheritHandle = FALSE;
+        sa.lpSecurityDescriptor = &sd;
+        psa = &sa;
+      }
     }
   }
 
@@ -1086,74 +1086,74 @@ CSharedMemory::CSharedMemory(wstring name, DWORD size)
   : BaseName(name), HMutex(NULL), HMapping(NULL), PMapView(NULL)
 {
     wstring mutex_name = BaseName + L"_SharedMemory_Mutex";
-	wstring mapping_name = BaseName + L"_SharedMemory_Mapping";
+    wstring mapping_name = BaseName + L"_SharedMemory_Mapping";
 
-	HMutex = CreateMutex(NULL, FALSE, mutex_name.c_str());
+    HMutex = CreateMutex(NULL, FALSE, mutex_name.c_str());
     if(Lock()) {
-	    HMapping = CreateFileMapping(INVALID_HANDLE_VALUE, NULL,
-			PAGE_READWRITE, 0, size, mapping_name.c_str());
-	    BOOL map_existed = (GetLastError() == ERROR_ALREADY_EXISTS);
-	    SzMapView=0;
-		if (HMapping) {
-	        PMapView = MapViewOfFile(HMapping, FILE_MAP_ALL_ACCESS, 0, 0, 0);
-	        if (PMapView) {
-	            SzMapView = size;
-	            if (!map_existed) {
-	                //ã§óLóÃàÊèâä˙âª
-					ZeroMemory(PMapView, SzMapView);
-	            }
-	        }
-	    }
-	    Unlock();
-	}
+        HMapping = CreateFileMapping(INVALID_HANDLE_VALUE, NULL,
+            PAGE_READWRITE, 0, size, mapping_name.c_str());
+        BOOL map_existed = (GetLastError() == ERROR_ALREADY_EXISTS);
+        SzMapView=0;
+        if (HMapping) {
+            PMapView = MapViewOfFile(HMapping, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+            if (PMapView) {
+                SzMapView = size;
+                if (!map_existed) {
+                    //ã§óLóÃàÊèâä˙âª
+                    ZeroMemory(PMapView, SzMapView);
+                }
+            }
+        }
+        Unlock();
+    }
 }
 //---------------------------------------------------------------------------
 CSharedMemory::~CSharedMemory()
 {
     if(PMapView) UnmapViewOfFile(PMapView);
     if(HMapping) CloseHandle(HMapping);
-    if(HMutex) 	 CloseHandle(HMutex);
+    if(HMutex)   CloseHandle(HMutex);
 }
 //---------------------------------------------------------------------------
 bool CSharedMemory::IsValid() const
 {
-	return HMutex && HMapping && PMapView ;
+    return HMutex && HMapping && PMapView ;
 }
 //---------------------------------------------------------------------------
 bool CSharedMemory::Lock(DWORD timeout) const
 {
-	if(!HMutex) return false ;
-	return WaitForSingleObject(HMutex, timeout) == WAIT_OBJECT_0 ;
+    if(!HMutex) return false ;
+    return WaitForSingleObject(HMutex, timeout) == WAIT_OBJECT_0 ;
 }
 //---------------------------------------------------------------------------
 bool CSharedMemory::Unlock() const
 {
-	if(!HMutex) return false ;
-	return ReleaseMutex(HMutex) ? true : false ;
+    if(!HMutex) return false ;
+    return ReleaseMutex(HMutex) ? true : false ;
 }
 //---------------------------------------------------------------------------
 DWORD CSharedMemory::Read(LPVOID *dst, DWORD sz, DWORD pos
-	, DWORD timeout) const
+    , DWORD timeout) const
 {
     if(!IsValid()||Size()<=pos) return 0;
-	if(sz+pos>Size()) sz = Size()-pos ;
-	if(Lock(timeout)) {
-		CopyMemory(dst,&static_cast<BYTE*>(Memory())[pos],sz);
-		Unlock();
-	}
-	return sz;
+    if(sz+pos>Size()) sz = Size()-pos ;
+    if(Lock(timeout)) {
+        CopyMemory(dst,&static_cast<BYTE*>(Memory())[pos],sz);
+        Unlock();
+    }
+    return sz;
 }
 //---------------------------------------------------------------------------
 DWORD CSharedMemory::Write(const LPVOID *src, DWORD sz, DWORD pos
-	, DWORD timeout)
+    , DWORD timeout)
 {
     if(!IsValid()||Size()<=pos) return 0;
-	if(sz+pos>Size()) sz = Size()-pos ;
-	if(Lock(timeout)) {
-		CopyMemory(&static_cast<BYTE*>(Memory())[pos],src,sz);
-		Unlock();
-	}
-	return sz;
+    if(sz+pos>Size()) sz = Size()-pos ;
+    if(Lock(timeout)) {
+        CopyMemory(&static_cast<BYTE*>(Memory())[pos],src,sz);
+        Unlock();
+    }
+    return sz;
 }
 //===========================================================================
 // Initializer

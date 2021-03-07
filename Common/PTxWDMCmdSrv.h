@@ -21,6 +21,7 @@ protected:
 	CPtDrvWrapper *Tuner_;
 	BOOL Terminated_;
 	BOOL StreamingEnabled_;
+	SERVER_SETTINGS Settings_;
 public:
 	CPTxWDMCmdServiceOperator(std::wstring name);
 	virtual ~CPTxWDMCmdServiceOperator();
@@ -41,12 +42,15 @@ protected:
 	BOOL ResSetLnbPower(BOOL Power);
 	BOOL ResGetCnAgc(DWORD &Cn100, DWORD &CurAgc, DWORD &MaxAgc);
 	BOOL ResPurgeStream();
+	BOOL ResSetupServer(const SERVER_SETTINGS *Options);
 public:
 	CPtDrvWrapper *Tuner() { return Tuner_; }
 	VOID KeepAlive() { LastAlive_ = Elapsed(); }
 	DWORD LastAlive() { return LastAlive_; }
 	BOOL Terminated() { return Terminated_; }
 	BOOL StreamingEnabled() { return StreamingEnabled_; }
+	int StreamerThreadPriority() { return Settings_.StreamerThreadPriority; }
+	DWORD CtrlPackets() { return Settings_.CtrlPackets; }
 	DWORD CurStreamSize();
 	BOOL GetStreamData(LPVOID data, DWORD &size);
 };
