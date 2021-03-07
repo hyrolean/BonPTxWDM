@@ -1,7 +1,18 @@
 # BonPTxWDM BonDriver_PTxWDM.dll
 BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se507005.html) for EARTHSOFT PT1/PT2/PT3.
 
-  BonPTxWDM.slnをコンパイルして出来上がったBonDriver_PTxWDM.dllと以下のファイル群をアプリ側のBonDriverフォルダに配置して動作確認…
+## 構築と動作確認
+
+  ソリューションを構築する前に以下のファイルを配置する必要があります。
+
+  - Common/inc に以下のファイルを配置
+    - PtDrvIfLib.h  (pt2wdmドライバの中に入っているもの)
+  
+  - Common/lib に以下のファイルを配置
+    - PtDrvIfLib.lib  (pt2wdmドライバの中に入っているもの)
+    - PtDrvIfLib64.lib  (pt2wdmドライバの中に入っているもの)
+
+  ソリューションBonPTxWDM.slnをコンパイルして出来上がったBonDriver_PTxWDM.dllと以下のファイル群をアプリ側のBonDriverフォルダに配置して動作確認…
   ```
   BonDriver_PTxWDM-S.dll ← BonPTxWDM BS/CS110 複合チューナー S側ID自動判別 (BonDriver_PTxWDM.dllをリネームしたもの)
   BonDriver_PTxWDM-T.dll ← BonPTxWDM 地デジ 複合チューナー T側ID自動判別 (BonDriver_PTxWDM.dllをリネームしたもの)
