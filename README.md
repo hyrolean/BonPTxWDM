@@ -27,3 +27,4 @@ BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se5
 ## TODO
 - [x] EDCB/TVTest配下での動作(１プロセス１チューナー構成)
 - [x] Spinelなどのプロクシソフト配下での動作(１プロセス多チューナー構成)
+- [ ] PTxWDMCtrl.exeとのバッファ通信の最適化
