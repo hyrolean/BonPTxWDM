@@ -18,30 +18,52 @@ CPTxWDMCmdOperator::CPTxWDMCmdOperator(wstring name, bool server)
 	ServerMode = server;
 	StaticId = 0 ;
 	UniServer = NULL;
+
+    wstring xfer_mutex_name = Name() + L"_PTxWDMCmdOperator_XferMutex";
+    HXferMutex = CreateMutex(NULL, FALSE, xfer_mutex_name.c_str());
 }
 //---------------------------------------------------------------------------
 CPTxWDMCmdOperator::~CPTxWDMCmdOperator()
 {
 	Uniqulize(nullptr);
+    if(HXferMutex)   CloseHandle(HXferMutex);
+}
+//---------------------------------------------------------------------------
+bool CPTxWDMCmdOperator::XferLock(DWORD timeout) const
+{
+    if(!HXferMutex) return false ;
+    return WaitForSingleObject(HXferMutex, timeout) == WAIT_OBJECT_0 ;
+}
+//---------------------------------------------------------------------------
+bool CPTxWDMCmdOperator::XferUnlock() const
+{
+    if(!HXferMutex) return false ;
+    return ReleaseMutex(HXferMutex) ? true : false ;
 }
 //---------------------------------------------------------------------------
 BOOL CPTxWDMCmdOperator::Xfer(OP &cmd, OP &res, DWORD timeout)
 {
-	exclusive_lock lock(&XferCritical);
-	if(ServerMode) return FALSE;
-	cmd.id = StaticId ;
-	if(!Send(&cmd,timeout)) return FALSE;
-	res.id = StaticId-1;
-	res.res = FALSE;
-	if(UniServer) {
-		if(!UniServer->ServiceReaction(timeout)) return FALSE;
-	}else {
-		if(!Listen(timeout)) return FALSE;
+	BOOL r=FALSE;
+	if(XferLock(timeout)) {
+		do {
+			if(ServerMode) break;
+			cmd.id = StaticId ;
+			if(!Send(&cmd,timeout)) break;
+			res.id = StaticId-1;
+			res.res = FALSE;
+			if(UniServer) {
+				if(!UniServer->ServiceReaction(timeout)) break;
+			}else {
+				if(!Listen(timeout)) break;
+			}
+			if(!Recv(&res,timeout)) break;
+			if(res.id!=StaticId) break;
+			StaticId++;
+			r=TRUE;
+		}while(0);
+		if(!XferUnlock()) r=FALSE;
 	}
-	if(!Recv(&res,timeout)) return FALSE;
-	if(res.id!=StaticId) return FALSE;
-	StaticId++;
-	return TRUE;
+	return r;
 }
 //---------------------------------------------------------------------------
 BOOL CPTxWDMCmdOperator::CmdTerminate(DWORD timeout)
@@ -213,49 +235,49 @@ BOOL CPTxWDMCmdOperator::ServiceReaction(DWORD timeout)
 	case PTXWDMCMD_CLOSE_TUNER:
 		res.res = ResCloseTuner() ;
 		break;
-    case PTXWDMCMD_GET_TUNER_COUNT:
+	case PTXWDMCMD_GET_TUNER_COUNT:
 		res.res = ResGetTunerCount(res.data[0]);
 		break;
-    case PTXWDMCMD_SET_TUNER_SLEEP:
+	case PTXWDMCMD_SET_TUNER_SLEEP:
 		res.res = ResSetTunerSleep(cmd.data[0]?TRUE:FALSE);
 		break;
-    case PTXWDMCMD_SET_STREAM_ENABLE:
+	case PTXWDMCMD_SET_STREAM_ENABLE:
 		res.res = ResSetStreamEnable(cmd.data[0]?TRUE:FALSE);
 		break;
-    case PTXWDMCMD_IS_STREAM_ENABLED: {
+	case PTXWDMCMD_IS_STREAM_ENABLED: {
 		BOOL enable = FALSE ;
 		res.res = ResIsStreamEnabled(enable);
 		res.data[0] = enable ;
 		break;
 	}
-    case PTXWDMCMD_SET_CHANNEL: {
+	case PTXWDMCMD_SET_CHANNEL: {
 		BOOL tuned = FALSE ;
 		res.res = ResSetChannel(tuned,cmd.data[0],cmd.data[1],cmd.data[2]);
 		res.data[0] = tuned ;
 		break;
 	}
-    case PTXWDMCMD_SET_FREQ:
+	case PTXWDMCMD_SET_FREQ:
 		res.res = ResSetFreq(cmd.data[0]);
 		break;
-    case PTXWDMCMD_GET_IDLIST_S: {
+	case PTXWDMCMD_GET_IDLIST_S: {
 		TSIDLIST tsid_list={0};
 		res.res = ResGetIdListS(tsid_list);
 		for(int i=0;i<8;i++) res.data[i] = tsid_list.Id[i];
 		break;
 	}
-    case PTXWDMCMD_GET_ID_S:
+	case PTXWDMCMD_GET_ID_S:
 		res.res = ResGetIdS(res.data[0]);
 		break;
-    case PTXWDMCMD_SET_ID_S:
+	case PTXWDMCMD_SET_ID_S:
 		res.res = ResSetIdS(cmd.data[0]);
 		break;
-    case PTXWDMCMD_SET_LNB_POWER:
+	case PTXWDMCMD_SET_LNB_POWER:
 		res.res = ResSetLnbPower(cmd.data[0]);
 		break;
-    case PTXWDMCMD_GET_CN_AGC:
+	case PTXWDMCMD_GET_CN_AGC:
 		res.res = ResGetCnAgc(res.data[0],res.data[1],res.data[2]);
 		break;
-    case PTXWDMCMD_PURGE_STREAM:
+	case PTXWDMCMD_PURGE_STREAM:
 		res.res = ResPurgeStream();
 		break;
 	case PTXWDMCMD_SETUP_SERVER:
@@ -293,11 +315,13 @@ CPTxWDMStreamer::CPTxWDMStreamer(wstring name, BOOL receiver, DWORD packet_sz,
 		packet_num*sizeof(DWORD))
 {
 	PosSzPackets = Size() - packet_num*sizeof(DWORD) ;
+	LastLockedRecvCur = packet_num ;
 }
 //---------------------------------------------------------------------------
 CPTxWDMStreamer::~CPTxWDMStreamer()
 {
-	;
+	if(LastLockedRecvCur<PacketCount())
+		UnlockPacket(LastLockedRecvCur);
 }
 //---------------------------------------------------------------------------
 BOOL CPTxWDMStreamer::Tx(const LPVOID data, DWORD size, DWORD timeout)
@@ -320,11 +344,26 @@ BOOL CPTxWDMStreamer::Rx(LPVOID data, DWORD &size, DWORD timeout)
 	if(!PacketRemain()) return FALSE;
 	DWORD cur = CurPacketRecv ;
 	if(LockPacket(cur,timeout)) {
+		if(LastLockedRecvCur<PacketCount()) {
+			// Unlock the previous locking point.
+			if(!UnlockPacket(LastLockedRecvCur)) {
+				UnlockPacket(cur);
+				return FALSE;
+			}
+		}
 		LPVOID data_top = &static_cast<LPBYTE>(Memory())[PosSzPackets];
 		DWORD n = static_cast<LPDWORD>(data_top)[CurPacketRecv];
 		BOOL res = Recv(data, timeout);
 		if(res) size = n ;
-		if(!UnlockPacket(cur)) res = FALSE ;
+		if(!res||PacketCount()<=1) {
+			UnlockPacket(cur);
+		}else {
+			// Store the current locking point to the LastLockedRecvCur value.
+			// This locking point will be unlock on the next time calling Rx.
+			//i It's a purpose to prevent the behaior that the CurPacketSend
+			//   cursor jump over the CurPacketRecv cursor. j
+			if(res) LastLockedRecvCur = cur ;
+		}
 		return res;
 	}
 	return FALSE;

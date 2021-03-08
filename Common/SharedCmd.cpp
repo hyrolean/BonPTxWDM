@@ -154,7 +154,7 @@ BOOL CSharedPacketStreamer::Send(const LPVOID data, DWORD timeout)
 //---------------------------------------------------------------------------
 BOOL CSharedPacketStreamer::Recv(LPVOID data, DWORD timeout)
 {
-    if(!PacketRemain()) return FALSE ;
+	if(!PacketRemain()) return FALSE ;
 	DWORD cur = CurPacketRecv ;
 	if(LockPacket(cur,timeout)) {
 		LPBYTE data_top = &static_cast<LPBYTE>(Memory())[PosPackets];
@@ -168,7 +168,7 @@ BOOL CSharedPacketStreamer::Recv(LPVOID data, DWORD timeout)
 DWORD CSharedPacketStreamer::PacketRemain(DWORD timeout)
 {
 	if(!IsValid()||!FReceiver) return 0;
-    CSharedCmdOperator::Recv(&CurPacketSend,timeout);
+	CSharedCmdOperator::Recv(&CurPacketSend,timeout);
 	if(CurPacketSend>=CurPacketRecv) return CurPacketSend-CurPacketRecv;
 	return CurPacketSend+(NumPacket-CurPacketRecv);
 }

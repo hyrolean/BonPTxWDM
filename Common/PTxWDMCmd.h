@@ -59,7 +59,9 @@ protected:
 		DWORD data[PTXWDMCMDMAXDATA];
 	};
 	DWORD StaticId;
-	critical_object XferCritical;
+	HANDLE HXferMutex;
+	bool XferLock(DWORD timeout=PTXWDMCMDTIMEOUT) const ;
+	bool XferUnlock() const ;
 	BOOL Xfer(OP &cmd, OP &res, DWORD timeout=PTXWDMCMDTIMEOUT);
 	CPTxWDMCmdOperator *UniServer;
 public:
@@ -114,13 +116,14 @@ public:
 
 	#define PTXWDMSTREAMER_SUFFIX	    L"_Stream"
 	#define PTXWDMSTREAMER_PACKETSIZE	64*1024
-	#define PTXWDMSTREAMER_DEFPACKETNUM	8
+	#define PTXWDMSTREAMER_DEFPACKETNUM	2
 
 class CPTxWDMStreamer : public CSharedPacketStreamer
 {
 private:
 	CSharedPacketStreamer::Send ;
 	CSharedPacketStreamer::Recv ;
+	DWORD LastLockedRecvCur;
 protected:
 	DWORD PosSzPackets ; // Position of the begining packets' size lists
 public:
