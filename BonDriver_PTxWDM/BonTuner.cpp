@@ -643,8 +643,12 @@ BOOL CBonTuner::LoadTuner()
 		SrvOpt.MAXDUR_FREQ = MAXDUR_FREQ ;
 		SrvOpt.MAXDUR_TMCC = MAXDUR_TMCC ;
 		SrvOpt.MAXDUR_TSID = MAXDUR_TSID ;
-		if(!m_CmdClient->CmdSetupServer(&SrvOpt))
+		SrvOpt.StreamerPacketSize = ASYNCTSPACKETSIZE ;
+		if(!m_CmdClient->CmdSetupServer(&SrvOpt)) {
 			MessageBeep(MB_ICONEXCLAMATION);
+			delete m_CmdClient ;
+			m_CmdClient=NULL;
+		}
 	}
 
 	if(hBonTunersMutex)
@@ -659,7 +663,7 @@ void CBonTuner::UnloadTuner()
 		WaitForSingleObject(hBonTunersMutex , INFINITE);
 
 	if(m_CmdClient) {
-		if(USELNB&&m_isISDBS) {
+		if(USELNB) {
 			ChangeLnbPower(FALSE);
 		}
 		m_CmdClient->CmdSetStreamEnable(FALSE);
@@ -687,7 +691,7 @@ void CBonTuner::UnloadTuner()
 //---------------------------------------------------------------------------
 const BOOL CBonTuner::ChangeLnbPower(BOOL power)
 {
-	if(!m_isISDBS||!m_CmdClient||m_iTunerStaticId<0) return FALSE ;
+	if(!m_CmdClient||m_iTunerStaticId<0) return FALSE ;
 
 	wstring mutexFormat = L"BonDriver_PTxWDM LNB Power %d" ;
 	WCHAR wcsMutexName[100],wcsAnotherMutexName[100];
@@ -695,26 +699,38 @@ const BOOL CBonTuner::ChangeLnbPower(BOOL power)
 	int anotherId = (m_iTunerStaticId&~1) | (m_iTunerStaticId&1?0:1) ;
 	swprintf_s(wcsAnotherMutexName,mutexFormat.c_str(),anotherId);
 
-	if(power) {
-		if(!m_hLnbMutex) {
-			m_hLnbMutex = CreateMutex(NULL, TRUE, wcsMutexName);
-			m_CmdClient->CmdSetLnbPower(TRUE);
+	if(m_isISDBS) {
+		if(power) {
+			if(!m_hLnbMutex) {
+				m_hLnbMutex = CreateMutex(NULL, TRUE, wcsMutexName);
+			}
+		}else {
+			if(m_hLnbMutex) {
+				//対のミューテックスを開いてLnb使用中か確認する
+				HANDLE hAnother = OpenMutex(MUTEX_ALL_ACCESS, FALSE, wcsAnotherMutexName);
+				if(hAnother) {
+					//対のチューナーがLnb電源供給中なので、電源OFFしない
+					power=TRUE;
+					CloseHandle(hAnother);
+				}
+				ReleaseMutex(m_hLnbMutex);
+				CloseHandle(m_hLnbMutex);
+				m_hLnbMutex=NULL;
+			}
 		}
 	}else {
-		if(m_hLnbMutex) {
-			//対のミューテックスを開いてLnb使用中か確認する
-			HANDLE hAnother = OpenMutex(MUTEX_ALL_ACCESS, FALSE, wcsAnotherMutexName);
-			if(!hAnother) {
-				m_CmdClient->CmdSetLnbPower(FALSE);
-			}else {
-				//対のチューナーがLnb電源供給中なので、電源OFFしない
-				CloseHandle(hAnother);
-			}
-			ReleaseMutex(m_hLnbMutex);
-			CloseHandle(m_hLnbMutex);
-			m_hLnbMutex=NULL;
+		power=FALSE;
+		if(HANDLE hMutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, wcsMutexName)) {
+			power=TRUE;
+			CloseHandle(hMutex);
+		}
+		if(HANDLE hMutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, wcsAnotherMutexName)) {
+			power=TRUE;
+			CloseHandle(hMutex);
 		}
 	}
+
+	m_CmdClient->CmdSetLnbPower(power);
 
 	return TRUE ;
 }
@@ -724,7 +740,7 @@ int CBonTuner::AsyncTsThreadProcMain()
 	CPTxWDMCmdServiceOperator *uniserver
 		= static_cast<CPTxWDMCmdServiceOperator*>(m_CmdClient->UniqueServer());
 
-	BUFFER<BYTE> buf(PTXWDMSTREAMER_PACKETSIZE);
+	BUFFER<BYTE> buf(ASYNCTSPACKETSIZE);
 
 	DBGOUT("--- Start Client Streaming ---\n");
 
@@ -747,7 +763,7 @@ int CBonTuner::AsyncTsThreadProcMain()
 	}else {
 
 		CPTxWDMStreamer streamer(m_strTunerStaticName+PTXWDMSTREAMER_SUFFIX,
-			TRUE,PTXWDMSTREAMER_PACKETSIZE,CTRLPACKETS);
+			TRUE,ASYNCTSPACKETSIZE,CTRLPACKETS);
 
 		DWORD rem=0;
 		while(!terminated) {
@@ -756,7 +772,7 @@ int CBonTuner::AsyncTsThreadProcMain()
 			if(wait_res==WAIT_OBJECT_0) {
 				DWORD sz=0;
 				if(streamer.Rx(buf.data(),sz,ASYNCTSRECVTHREADWAIT)) {
-					if(m_AsyncTSFifo->Push(buf.data(),sz,false,ASYNCTSFIFOALLOCWAITING?true:false))
+					if(m_AsyncTSFifo->Push(buf.data(),sz,true,ASYNCTSFIFOALLOCWAITING?true:false))
 						m_evAsyncTsStream.set();
 					if(!rem) rem=streamer.PacketRemain(ASYNCTSRECVTHREADWAIT);
 					else rem--;
@@ -811,7 +827,7 @@ const BOOL CBonTuner::OpenTuner(void)
 {
 	if(m_CmdClient) {
 		m_CmdClient->CmdSetTunerSleep(FALSE);
-		if(USELNB&&m_isISDBS) {
+		if(USELNB) {
 			ChangeLnbPower(TRUE);
 		}
 	}
@@ -822,7 +838,7 @@ const BOOL CBonTuner::OpenTuner(void)
 void CBonTuner::CloseTuner(void)
 {
 	if(m_CmdClient) {
-		if(USELNB&&m_isISDBS) {
+		if(USELNB) {
 			ChangeLnbPower(FALSE);
 		}
 		StopAsyncTsThread();
@@ -1011,7 +1027,6 @@ const DWORD CBonTuner::GetActiveDeviceNum(void)
 //-----
 const BOOL CBonTuner::SetLnbPower(const BOOL bEnable)
 {
-	if(!m_isISDBS) return FALSE;
 	if(!BON3LNB) return TRUE;
 	return ChangeLnbPower(bEnable) ;
 }

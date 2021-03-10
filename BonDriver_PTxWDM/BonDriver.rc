@@ -2,8 +2,8 @@
 
 LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
 1 VERSIONINFO
- FILEVERSION 0,2021,03,08
- PRODUCTVERSION 0,2021,03,08
+ FILEVERSION 0,2021,03,10
+ PRODUCTVERSION 0,2021,03,10
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -20,12 +20,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "hyrolean-dtv"
             VALUE "FileDescription", "BonDriver_PTxWDM via pt2wdm"
-            VALUE "FileVersion", "0,2021,03,08"
+            VALUE "FileVersion", "0,2021,03,10"
             VALUE "InternalName", "BonDriver_PTxWDM.dll"
             VALUE "LegalCopyright", "hyrolean-dtv 2021"
             VALUE "OriginalFilename", "BonDriver_PTxWDM.dll"
             VALUE "ProductName", "BonDriver_PTxWDM"
-            VALUE "ProductVersion", "0,2021,03,08"
+            VALUE "ProductVersion", "0,2021,03,10"
         END
     END
     BLOCK "VarFileInfo"

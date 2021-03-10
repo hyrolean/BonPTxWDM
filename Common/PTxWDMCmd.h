@@ -42,6 +42,7 @@ struct SERVER_SETTINGS {
   DWORD MAXDUR_FREQ;
   DWORD MAXDUR_TMCC;
   DWORD MAXDUR_TSID;
+  DWORD StreamerPacketSize;
 };
 
   // CPTxWDMCmdOperator (PTxWDM Command Operator)
@@ -115,7 +116,6 @@ public:
   // CPTxWDMStreamer
 
 	#define PTXWDMSTREAMER_SUFFIX	    L"_Stream"
-	#define PTXWDMSTREAMER_PACKETSIZE	64*1024
 	#define PTXWDMSTREAMER_DEFPACKETNUM	2
 
 class CPTxWDMStreamer : public CSharedPacketStreamer

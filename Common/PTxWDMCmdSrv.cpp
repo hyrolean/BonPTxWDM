@@ -23,6 +23,7 @@ CPTxWDMCmdServiceOperator::CPTxWDMCmdServiceOperator(wstring name)
 	Settings_.MAXDUR_FREQ = 1000; //ü”g”’²®‚É”ï‚â‚·Å‘åŠÔ(msec)
 	Settings_.MAXDUR_TMCC = 1500; //TMCCæ“¾‚É”ï‚â‚·Å‘åŠÔ(msec)
 	Settings_.MAXDUR_TSID = 3000; //TSIDİ’è‚É”ï‚â‚·Å‘åŠÔ(msec)
+	Settings_.StreamerPacketSize = 64*1024 ;
 	KeepAlive();
 }
 //---------------------------------------------------------------------------

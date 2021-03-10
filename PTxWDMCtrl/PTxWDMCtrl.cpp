@@ -21,24 +21,22 @@ class CPTxWDMService
 protected:
 	CPTxWDMCmdServiceOperator	Op;
 	CPTxWDMStreamer				*St;
-	CAsyncFifo					Fifo;
 	DWORD CmdWait, Timeout;
 	HANDLE Thread;
 	BOOL ThTerm;
 
 private:
 	int StreamingThreadProcMain() {
-		BUFFER<BYTE> buf(PTXWDMSTREAMER_PACKETSIZE);
+		BUFFER<BYTE> buf(Op.StreamerPacketSize());
+		DWORD sz; bool retry=false;
 		while(!ThTerm) {
-			DWORD sz = Op.CurStreamSize();
-			if(!sz) {Sleep(10);continue;}
-			if(sz>buf.size()) sz=(DWORD)buf.size();
-			if(Op.GetStreamData(buf.data(),sz)) {
-				if(Fifo.Push(buf.data(),sz,false)) {
-					BYTE *data; DWORD len,rem;
-					if(Fifo.Pop(&data,&len,&rem))
-						St->Tx(data,len,Timeout);
-				}
+			if(!retry) {
+				sz = Op.CurStreamSize();
+				if(sz<buf.size()) {Sleep(10);continue;}
+				sz = (DWORD)buf.size();
+			}
+			if(retry || Op.GetStreamData(buf.data(),sz)) {
+				retry = !St->Tx(buf.data(),sz,Timeout) ;
 			}
 		}
 		DBGOUT("-- Streaming Done --\n");
@@ -54,13 +52,13 @@ private:
 
 protected:
 	void StartStreaming() {
-		if(Thread != INVALID_HANDLE_VALUE) return /*active*/;
+		if(Thread != INVALID_HANDLE_VALUE) return /*already activated*/;
 		Thread = (HANDLE)_beginthreadex(NULL, 0, StreamingThreadProc, this,
 			CREATE_SUSPENDED, NULL) ;
 		if(Thread != INVALID_HANDLE_VALUE) {
 			if(St) delete St;
 			St = new CPTxWDMStreamer( Op.Name()+PTXWDMSTREAMER_SUFFIX, FALSE,
-				PTXWDMSTREAMER_PACKETSIZE, Op.CtrlPackets() );
+				Op.StreamerPacketSize(), Op.CtrlPackets() );
 			DBGOUT("-- Start Streaming --\n");
 			::SetThreadPriority( Thread, Op.StreamerThreadPriority() );
 			ThTerm=FALSE;
@@ -71,21 +69,19 @@ protected:
 	}
 
 	void StopStreaming() {
-		if(Thread == INVALID_HANDLE_VALUE) return /*inactive*/;
+		if(Thread == INVALID_HANDLE_VALUE) return /*already inactivated*/;
 		ThTerm=TRUE;
 		if(::WaitForSingleObject(Thread,Timeout*2) != WAIT_OBJECT_0) {
 			::TerminateThread(Thread, 0);
 		}
 		Thread = INVALID_HANDLE_VALUE ;
-		Fifo.Purge();
 		if(St) { delete St; St=NULL; }
 		DBGOUT("-- Stop Streaming --\n");
 	}
 
 public:
 	CPTxWDMService(wstring name, DWORD cmdwait=INFINITE, DWORD timeout=INFINITE)
-	 :	Op( name ), Thread(INVALID_HANDLE_VALUE), ThTerm(TRUE),
-		St( NULL ), Fifo(2,2,0,PTXWDMSTREAMER_PACKETSIZE)
+	 :	Op( name ), St( NULL ), Thread(INVALID_HANDLE_VALUE), ThTerm(TRUE)
 	{ CmdWait = cmdwait ; Timeout = timeout ; }
 	~CPTxWDMService() { StopStreaming(); }
 

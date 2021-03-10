@@ -50,6 +50,7 @@ public:
 	BOOL Terminated() { return Terminated_; }
 	BOOL StreamingEnabled() { return StreamingEnabled_; }
 	int StreamerThreadPriority() { return Settings_.StreamerThreadPriority; }
+	DWORD StreamerPacketSize() { return Settings_.StreamerPacketSize; }
 	DWORD CtrlPackets() { return Settings_.CtrlPackets; }
 	DWORD CurStreamSize();
 	BOOL GetStreamData(LPVOID data, DWORD &size);

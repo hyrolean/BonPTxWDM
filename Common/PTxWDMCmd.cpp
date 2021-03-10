@@ -344,26 +344,25 @@ BOOL CPTxWDMStreamer::Rx(LPVOID data, DWORD &size, DWORD timeout)
 	if(!PacketRemain()) return FALSE;
 	DWORD cur = CurPacketRecv ;
 	if(LockPacket(cur,timeout)) {
-		if(LastLockedRecvCur<PacketCount()) {
-			// Unlock the previous locking point.
-			if(!UnlockPacket(LastLockedRecvCur)) {
-				UnlockPacket(cur);
-				return FALSE;
-			}
-		}
 		LPVOID data_top = &static_cast<LPBYTE>(Memory())[PosSzPackets];
 		DWORD n = static_cast<LPDWORD>(data_top)[CurPacketRecv];
 		BOOL res = Recv(data, timeout);
-		if(res) size = n ;
-		if(!res||PacketCount()<=1) {
-			UnlockPacket(cur);
-		}else {
-			// Store the current locking point to the LastLockedRecvCur value.
-			// This locking point will be unlock on the next time calling Rx.
-			//i It's a purpose to prevent the behaior that the CurPacketSend
-			//   cursor jump over the CurPacketRecv cursor. j
-			if(res) LastLockedRecvCur = cur ;
+		if(res) {
+			if(LastLockedRecvCur<PacketCount()) {
+				// Unlock the previous locking point.
+				if(!UnlockPacket(LastLockedRecvCur))
+					res = FALSE;
+			}
 		}
+		if(res) {
+			size = n ;
+			// Store the current locking point to a LastLockedRecvCur variable.
+			// This locking point will be unlocked on the next time calling Rx.
+			// ( It's a purpose to prevent the behavior that the CurPacketSend
+			//   cursor jump over the CurPacketRecv cursor. )
+			LastLockedRecvCur = cur ;
+		}else
+			UnlockPacket(cur);
 		return res;
 	}
 	return FALSE;

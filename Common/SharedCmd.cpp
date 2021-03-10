@@ -146,6 +146,7 @@ BOOL CSharedPacketStreamer::Send(const LPVOID data, DWORD timeout)
 		CopyMemory(&data_top[CurPacketSend++*SzPacket],data,SzPacket);
 		if(CurPacketSend>=NumPacket) CurPacketSend=0 ;
 		BOOL res = CSharedCmdOperator::Send(&CurPacketSend,timeout);
+		if(!res) CurPacketSend=cur;
 		if(!UnlockPacket(cur)) res = FALSE;
 		return res;
 	}
