@@ -21,7 +21,7 @@ BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se5
   PTxWDMCtrl.exe ← Spinelなどのプロクシソフト配下で使用する場合に配置 (１プロセス多チューナー構成用制御プログラム)
   ```
 
-  **※α版サンプルです。 無保証( NO WARRANTY )です。 お取り扱いには、十分にご注意ください。**
+  **※β版です。無保証( NO WARRANTY )です。とりあえず、一連の動作には支障なく動く程度には仕上がっているとは思いますが、テスト期間が短い為、潜在的なバグについては未知数です。**
 
 
 ## TODO
