@@ -18,10 +18,27 @@ BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se5
   BonDriver_PTxWDM-T.dll ← BonPTxWDM 地デジ 複合チューナー T側ID自動判別 (BonDriver_PTxWDM.dllをリネームしたもの)
   BonDriver_PTxWDM.ini ← BonPTxWDM 用設定ファイル
   BonDriver_PTxWDM.ch.txt ← BonPTxWDM 用チャンネルファイル (配置しなくてもおｋ)
-  PTxWDMCtrl.exe ← Spinelなどのプロクシソフト配下で使用する場合に配置 (１プロセス多チューナー構成用制御プログラム)
+  PTxWDMCtrl.exe ← １プロセス多チューナー構成用制御プログラム (Spinelなどのプロクシソフト配下で使用する場合に配置)
   ```
 
-  **※β版です。無保証( NO WARRANTY )です。とりあえず、一連の動作には支障なく動く程度には仕上がっているとは思いますが、テスト期間が短い為、潜在的なバグについては未知数です。**
+  自動判別ではなく、IDで指定する場合は、次のように連番で記述してください。
+  PTxWDMで連番を利用する場合は以下の通りです。
+  ```
+  BonDriver_PTxWDM-S0.dll ← BS/CS110 複合チューナーの最初のチューナーのS1端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  BonDriver_PTxWDM-T0.dll ← 地デジ 複合チューナーの最初のチューナーのT1端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  BonDriver_PTxWDM-S1.dll ← BS/CS110 複合チューナーの最初のチューナーのS2端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  BonDriver_PTxWDM-T1.dll ← 地デジ 複合チューナーの最初のチューナーのT2端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  BonDriver_PTxWDM-S2.dll ← BS/CS110 複合チューナーの二枚目のチューナーのS1端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  BonDriver_PTxWDM-T2.dll ← 地デジ 複合チューナーの二枚目のチューナーのT1端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  BonDriver_PTxWDM-S3.dll ← BS/CS110 複合チューナーの二枚目のチューナーのS2端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  BonDriver_PTxWDM-T3.dll ← 地デジ 複合チューナーの二枚目のチューナーのT2端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  BonDriver_PTxWDM-S4.dll ← BS/CS110 複合チューナーの三枚目のチューナーのS1端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  BonDriver_PTxWDM-T4.dll ← 地デジ 複合チューナーの三枚目のチューナーのT1端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  BonDriver_PTxWDM-S5.dll ← BS/CS110 複合チューナーの三枚目のチューナーのS2端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  BonDriver_PTxWDM-T5.dll ← 地デジ 複合チューナーの三枚目のチューナーのT2端子のチューナー (BonDriver_PTxWDM.dllをリネームしたもの)
+  ```
+
+  **※β版です。無保証( NO WARRANTY )です。とりあえず、一連の動作に支障なく動く程度に仕上がっているとは思いますが、テスト期間が短い為、潜在的なバグについては未知数です。**
 
 
 ## TODO
