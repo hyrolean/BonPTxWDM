@@ -70,8 +70,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,2021,03,10
- PRODUCTVERSION 0,2021,03,10
+ FILEVERSION 0,2021,03,12
+ PRODUCTVERSION 0,2021,03,12
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -88,12 +88,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "hyrolean-dtv"
             VALUE "FileDescription", "PTxWDMCtrl via pt2wdm"
-            VALUE "FileVersion", "0,2021,03,10"
+            VALUE "FileVersion", "0,2021,03,12"
             VALUE "InternalName", "PTxWDMCtrl.exe"
             VALUE "LegalCopyright", "hyrolean-dtv 2021"
             VALUE "OriginalFilename", "PTxWDMCtrl.exe"
             VALUE "ProductName", "PTxWDMCtrl"
-            VALUE "ProductVersion", "0,2021,03,10"
+            VALUE "ProductVersion", "0,2021,03,12"
         END
     END
     BLOCK "VarFileInfo"

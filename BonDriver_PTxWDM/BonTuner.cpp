@@ -740,8 +740,6 @@ int CBonTuner::AsyncTsThreadProcMain()
 	CPTxWDMCmdServiceOperator *uniserver
 		= static_cast<CPTxWDMCmdServiceOperator*>(m_CmdClient->UniqueServer());
 
-	BUFFER<BYTE> buf(ASYNCTSPACKETSIZE);
-
 	DBGOUT("--- Start Client Streaming ---\n");
 
 	BOOL &terminated = m_bAsyncTsTerm ;
@@ -749,11 +747,15 @@ int CBonTuner::AsyncTsThreadProcMain()
 	if(uniserver) {
 
 		while(!terminated) {
-			DWORD sz = uniserver->CurStreamSize();
-			if(!sz) {Sleep(10);continue;}
-			if(sz>buf.size()) sz=(DWORD)buf.size();
-			if(uniserver->GetStreamData(buf.data(),sz)) {
-				if(m_AsyncTSFifo->Push(buf.data(),sz,false,ASYNCTSFIFOALLOCWAITING?true:false))
+			if(uniserver->CurStreamSize()<ASYNCTSPACKETSIZE) {Sleep(10);continue;}
+			auto cache = m_AsyncTSFifo->BeginWriteBack(ASYNCTSFIFOALLOCWAITING?true:false) ;
+			if(cache) {
+				DWORD sz=ASYNCTSPACKETSIZE;
+				if(uniserver->GetStreamData(cache->data(),sz))
+					cache->resize(sz);
+				else
+					cache->resize(0);
+				if(m_AsyncTSFifo->FinishWriteBack(cache))
 					m_evAsyncTsStream.set();
 			}
 		}
@@ -771,12 +773,19 @@ int CBonTuner::AsyncTsThreadProcMain()
 			if(wait_res==WAIT_TIMEOUT) continue;
 			if(wait_res==WAIT_OBJECT_0) {
 				DWORD sz=0;
-				if(streamer.Rx(buf.data(),sz,ASYNCTSRECVTHREADWAIT)) {
-					if(m_AsyncTSFifo->Push(buf.data(),sz,true,ASYNCTSFIFOALLOCWAITING?true:false))
+				auto cache = m_AsyncTSFifo->BeginWriteBack(ASYNCTSFIFOALLOCWAITING?true:false) ;
+				if(cache) {
+					if(streamer.Rx(cache->data(),sz,ASYNCTSRECVTHREADWAIT))
+						cache->resize(sz);
+					else
+						cache->resize(0);
+					if(m_AsyncTSFifo->FinishWriteBack(cache))
 						m_evAsyncTsStream.set();
-					if(!rem) rem=streamer.PacketRemain(ASYNCTSRECVTHREADWAIT);
-					else rem--;
 				}
+				if(!rem)
+					rem=streamer.PacketRemain(ASYNCTSRECVTHREADWAIT);
+				else
+					rem--;
 			}else break;
 		}
 

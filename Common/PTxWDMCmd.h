@@ -118,6 +118,8 @@ public:
 	#define PTXWDMSTREAMER_SUFFIX	    L"_Stream"
 	#define PTXWDMSTREAMER_DEFPACKETNUM	2
 
+	typedef BOOL (__stdcall *TXDIRECTFUNC)(LPVOID dst, DWORD &sz, PVOID arg);
+
 class CPTxWDMStreamer : public CSharedPacketStreamer
 {
 private:
@@ -131,6 +133,7 @@ public:
 		DWORD packet_num);
 	virtual ~CPTxWDMStreamer();
 	BOOL Tx(const LPVOID data, DWORD size, DWORD timeout=INFINITE) ;
+	BOOL TxDirect(TXDIRECTFUNC Func, PVOID arg, DWORD timeout=INFINITE);
 	BOOL Rx(LPVOID data, DWORD &size, DWORD timeout=INFINITE) ;
 };
 

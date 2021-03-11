@@ -330,9 +330,32 @@ BOOL CPTxWDMStreamer::Tx(const LPVOID data, DWORD size, DWORD timeout)
 	if(size>SzPacket) return FALSE;
 	DWORD cur = CurPacketSend ;
 	if(LockPacket(cur,timeout)) {
-		LPVOID data_top = &static_cast<LPBYTE>(Memory())[PosSzPackets];
-		static_cast<LPDWORD>(data_top)[CurPacketSend]=size;
+		LPVOID sizes_top = &static_cast<LPBYTE>(Memory())[PosSzPackets];
+		static_cast<LPDWORD>(sizes_top)[CurPacketSend]=size;
 		BOOL res = Send(data, timeout);
+		if(!UnlockPacket(cur)) res = FALSE ;
+		return res;
+	}
+	return FALSE;
+}
+//---------------------------------------------------------------------------
+BOOL CPTxWDMStreamer::TxDirect(TXDIRECTFUNC func, PVOID arg, DWORD timeout)
+{
+	if(!IsValid()||FReceiver) return FALSE;
+	if(func==NULL) { // for retry
+		if(arg) *static_cast<BOOL*>(arg) = TRUE ;
+		return Send(NULL, timeout);
+	}
+	DWORD cur = CurPacketSend ;
+	if(LockPacket(cur,timeout)) {
+		LPBYTE data_top = &static_cast<LPBYTE>(Memory())[PosPackets];
+		DWORD sz = SzPacket;
+		BOOL res = FALSE ;
+		if(func(&data_top[CurPacketSend*SzPacket],sz,arg)) {
+			LPVOID sizes_top = &static_cast<LPBYTE>(Memory())[PosSzPackets];
+			static_cast<LPDWORD>(sizes_top)[CurPacketSend]=sz;
+			res = Send(NULL, timeout);
+		}
 		if(!UnlockPacket(cur)) res = FALSE ;
 		return res;
 	}
@@ -344,8 +367,8 @@ BOOL CPTxWDMStreamer::Rx(LPVOID data, DWORD &size, DWORD timeout)
 	if(!PacketRemain()) return FALSE;
 	DWORD cur = CurPacketRecv ;
 	if(LockPacket(cur,timeout)) {
-		LPVOID data_top = &static_cast<LPBYTE>(Memory())[PosSzPackets];
-		DWORD n = static_cast<LPDWORD>(data_top)[CurPacketRecv];
+		LPVOID sizes_top = &static_cast<LPBYTE>(Memory())[PosSzPackets];
+		DWORD n = static_cast<LPDWORD>(sizes_top)[CurPacketRecv];
 		BOOL res = Recv(data, timeout);
 		if(res) {
 			if(LastLockedRecvCur<PacketCount()) {

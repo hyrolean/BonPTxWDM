@@ -143,8 +143,8 @@ BOOL CSharedPacketStreamer::Send(const LPVOID data, DWORD timeout)
 	DWORD cur = CurPacketSend ;
 	if(LockPacket(cur,timeout)) {
 		LPBYTE data_top = &static_cast<LPBYTE>(Memory())[PosPackets];
-		CopyMemory(&data_top[CurPacketSend++*SzPacket],data,SzPacket);
-		if(CurPacketSend>=NumPacket) CurPacketSend=0 ;
+		if(data) CopyMemory(&data_top[CurPacketSend*SzPacket],data,SzPacket);
+		if(++CurPacketSend>=NumPacket) CurPacketSend=0 ;
 		BOOL res = CSharedCmdOperator::Send(&CurPacketSend,timeout);
 		if(!res) CurPacketSend=cur;
 		if(!UnlockPacket(cur)) res = FALSE;
@@ -159,8 +159,8 @@ BOOL CSharedPacketStreamer::Recv(LPVOID data, DWORD timeout)
 	DWORD cur = CurPacketRecv ;
 	if(LockPacket(cur,timeout)) {
 		LPBYTE data_top = &static_cast<LPBYTE>(Memory())[PosPackets];
-		CopyMemory(data,&data_top[CurPacketRecv++*SzPacket],SzPacket);
-		if(CurPacketRecv>=NumPacket) CurPacketRecv=0;
+		if(data) CopyMemory(data,&data_top[CurPacketRecv*SzPacket],SzPacket);
+		if(++CurPacketRecv>=NumPacket) CurPacketRecv=0;
 		return UnlockPacket(cur)?TRUE:FALSE;
 	}
 	return FALSE;

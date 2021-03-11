@@ -16,7 +16,7 @@ using namespace std;
 DWORD MaxWait = DEFAULT_MAXWAIT ;
 DWORD MaxAlive = DEFAULT_MAXALIVE ;
 
-class CPTxWDMService
+class CPTxWDMCtrlService
 {
 protected:
 	CPTxWDMCmdServiceOperator	Op;
@@ -26,25 +26,31 @@ protected:
 	BOOL ThTerm;
 
 private:
+	BOOL TxWriteDone;
+	static BOOL __stdcall TxDirectWriteProc(LPVOID dst, DWORD &sz, PVOID arg) {
+		auto this_ = static_cast<CPTxWDMCtrlService*>(arg) ;
+		return (this_->TxWriteDone = this_->Op.GetStreamData(dst, sz)) ;
+	}
+
 	int StreamingThreadProcMain() {
-		BUFFER<BYTE> buf(Op.StreamerPacketSize());
-		DWORD sz; bool retry=false;
+		const DWORD szp = Op.StreamerPacketSize() ;
+		bool retry=false;
 		while(!ThTerm) {
 			if(!retry) {
-				sz = Op.CurStreamSize();
-				if(sz<buf.size()) {Sleep(10);continue;}
-				sz = (DWORD)buf.size();
+				if(Op.CurStreamSize()<szp) {Sleep(10);continue;}
 			}
-			if(retry || Op.GetStreamData(buf.data(),sz)) {
-				retry = !St->Tx(buf.data(),sz,Timeout) ;
-			}
+			TxWriteDone = FALSE;
+			BOOL r = retry ?
+				St->TxDirect(NULL, &TxWriteDone, Timeout):
+				St->TxDirect(TxDirectWriteProc, this, Timeout);
+			retry = !r && TxWriteDone ;
 		}
 		DBGOUT("-- Streaming Done --\n");
 		return 0;
 	}
 
 	static unsigned int __stdcall StreamingThreadProc (PVOID pv) {
-		auto this_ = static_cast<CPTxWDMService*>(pv) ;
+		auto this_ = static_cast<CPTxWDMCtrlService*>(pv) ;
 		unsigned int result = this_->StreamingThreadProcMain() ;
 		_endthreadex(result) ;
 		return result;
@@ -80,10 +86,10 @@ protected:
 	}
 
 public:
-	CPTxWDMService(wstring name, DWORD cmdwait=INFINITE, DWORD timeout=INFINITE)
+	CPTxWDMCtrlService(wstring name, DWORD cmdwait=INFINITE, DWORD timeout=INFINITE)
 	 :	Op( name ), St( NULL ), Thread(INVALID_HANDLE_VALUE), ThTerm(TRUE)
 	{ CmdWait = cmdwait ; Timeout = timeout ; }
-	~CPTxWDMService() { StopStreaming(); }
+	~CPTxWDMCtrlService() { StopStreaming(); }
 
 	int MainLoop() {
 		BOOL enable_streaming = FALSE ;
@@ -128,6 +134,6 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 	wstring name = lpCmdLine ;
 	DBGOUT("service name: %s\n",wcs2mbcs(name).c_str());
 
-	return CPTxWDMService(name, MaxWait, MaxAlive).MainLoop() ;
+	return CPTxWDMCtrlService(name, MaxWait, MaxAlive).MainLoop() ;
 }
 
