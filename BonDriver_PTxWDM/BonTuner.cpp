@@ -693,6 +693,9 @@ const BOOL CBonTuner::ChangeLnbPower(BOOL power)
 {
 	if(!m_CmdClient||m_iTunerStaticId<0) return FALSE ;
 
+	if(hBonTunersMutex)
+		WaitForSingleObject(hBonTunersMutex , INFINITE);
+
 	wstring mutexFormat = L"BonDriver_PTxWDM LNB Power %d" ;
 	WCHAR wcsMutexName[100],wcsAnotherMutexName[100];
 	swprintf_s(wcsMutexName,mutexFormat.c_str(),m_iTunerStaticId);
@@ -731,6 +734,9 @@ const BOOL CBonTuner::ChangeLnbPower(BOOL power)
 	}
 
 	m_CmdClient->CmdSetLnbPower(power);
+
+	if(hBonTunersMutex)
+		ReleaseMutex(hBonTunersMutex);
 
 	return TRUE ;
 }
