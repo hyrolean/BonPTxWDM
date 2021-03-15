@@ -843,6 +843,7 @@ void CBonTuner::StopAsyncTsThread()
 	if(::WaitForSingleObject(Thread,30000) != WAIT_OBJECT_0) {
 		::TerminateThread(Thread, 0);
 	}
+	CloseHandle(Thread);
 	Thread = INVALID_HANDLE_VALUE ;
 }
 //---------------------------------------------------------------------------
