@@ -186,6 +186,7 @@ protected: // internals
 	DWORD			m_dwCurChannel;
 	BOOL			m_hasStream;
 	HANDLE			m_hTunerMutex;
+	HANDLE			m_hCtrlProcess;
 
 	//Lnb
 	HANDLE m_hLnbMutex;

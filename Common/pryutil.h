@@ -599,9 +599,9 @@ private:
 	LPVOID PMapView;
 	DWORD SzMapView;
 protected:
-    LPVOID Memory() const { return PMapView; }
+	LPVOID Memory() const { return PMapView; }
 	bool Lock(DWORD timeout = INFINITE) const ;
-    bool Unlock() const ;
+	bool Unlock() const ;
 protected:
 	CSharedMemory(std::wstring name, DWORD size);
 	virtual ~CSharedMemory();

@@ -20,7 +20,7 @@ class CPTxWDMCtrlService
 {
 protected:
 	CPTxWDMCmdServiceOperator	Op;
-	CPTxWDMStreamer				*St;
+	CSharedTransportStreamer	*St;
 	DWORD CmdWait, Timeout;
 	HANDLE Thread;
 	BOOL ThTerm;
@@ -41,8 +41,8 @@ private:
 			}
 			TxWriteDone = FALSE;
 			BOOL r = retry ?
-				St->TxDirect(NULL, &TxWriteDone, Timeout):
-				St->TxDirect(TxDirectWriteProc, this, Timeout);
+				St->TxDirect(NULL, &TxWriteDone, CmdWait):
+				St->TxDirect(TxDirectWriteProc, this, CmdWait);
 			retry = !r && TxWriteDone ;
 		}
 		DBGOUT("-- Streaming Done --\n");
@@ -63,7 +63,7 @@ protected:
 			CREATE_SUSPENDED, NULL) ;
 		if(Thread != INVALID_HANDLE_VALUE) {
 			if(St) delete St;
-			St = new CPTxWDMStreamer( Op.Name()+PTXWDMSTREAMER_SUFFIX, FALSE,
+			St = new CSharedTransportStreamer( Op.Name()+PTXWDMSTREAMER_SUFFIX, FALSE,
 				Op.StreamerPacketSize(), Op.CtrlPackets() );
 			DBGOUT("-- Start Streaming --\n");
 			::SetThreadPriority( Thread, Op.StreamerThreadPriority() );
@@ -107,7 +107,7 @@ public:
 					else					StopStreaming();
 				}
 			}else if(wait_res==WAIT_TIMEOUT) {
-				if(Elapsed(Op.LastAlive())>=MaxAlive) {
+				if(Elapsed(Op.LastAlive())>=Timeout) {
 					if(HANDLE mutex = OpenMutex(MUTEX_ALL_ACCESS,FALSE,Op.Name().c_str())) {
 						Op.KeepAlive();
 						CloseHandle(mutex);

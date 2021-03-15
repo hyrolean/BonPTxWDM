@@ -113,29 +113,8 @@ public:
 };
 
 
-  // CPTxWDMStreamer
-
 	#define PTXWDMSTREAMER_SUFFIX	    L"_Stream"
 	#define PTXWDMSTREAMER_DEFPACKETNUM	2
-
-	typedef BOOL (__stdcall *TXDIRECTFUNC)(LPVOID dst, DWORD &sz, PVOID arg);
-
-class CPTxWDMStreamer : public CSharedPacketStreamer
-{
-private:
-	CSharedPacketStreamer::Send ;
-	CSharedPacketStreamer::Recv ;
-	DWORD LastLockedRecvCur;
-protected:
-	DWORD PosSzPackets ; // Position of the begining packets' size lists
-public:
-	CPTxWDMStreamer(std::wstring name, BOOL receiver, DWORD packet_sz,
-		DWORD packet_num);
-	virtual ~CPTxWDMStreamer();
-	BOOL Tx(const LPVOID data, DWORD size, DWORD timeout=INFINITE) ;
-	BOOL TxDirect(TXDIRECTFUNC Func, PVOID arg, DWORD timeout=INFINITE);
-	BOOL Rx(LPVOID data, DWORD &size, DWORD timeout=INFINITE) ;
-};
 
 //---------------------------------------------------------------------------
 } // End of namespace PRY8EAlByw

@@ -54,6 +54,29 @@ public:
 	DWORD PacketRemain(DWORD timeout=INFINITE) ;
 };
 
+  // CSharedTransportStreamer ( Unidirectional packet streamer for async )
+
+class CSharedTransportStreamer : public CSharedPacketStreamer
+{
+public:
+	typedef BOOL (__stdcall *TXDIRECTFUNC)(LPVOID dst, DWORD &sz, PVOID arg);
+private:
+	CSharedPacketStreamer::Send ;
+	CSharedPacketStreamer::Recv ;
+	DWORD LastLockedRecvCur;
+protected:
+	DWORD PosSzPackets ; // Position of the begining packets' size lists
+	DWORD TickLastTx ; // Tick count when the last Tx was done
+public:
+	CSharedTransportStreamer(std::wstring name, BOOL receiver, DWORD packet_sz,
+		DWORD packet_num, DWORD extra_sz=0);
+	virtual ~CSharedTransportStreamer();
+	BOOL Tx(const LPVOID data, DWORD size, DWORD timeout=INFINITE) ;
+	BOOL TxDirect(TXDIRECTFUNC Func, PVOID arg, DWORD timeout=INFINITE);
+	BOOL Rx(LPVOID data, DWORD &size, DWORD timeout=INFINITE) ;
+	DWORD LastTxAlive() { return TickLastTx; }
+};
+
 //---------------------------------------------------------------------------
 } // End of namespace PRY8EAlByw
 //===========================================================================

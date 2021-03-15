@@ -173,6 +173,93 @@ DWORD CSharedPacketStreamer::PacketRemain(DWORD timeout)
 	if(CurPacketSend>=CurPacketRecv) return CurPacketSend-CurPacketRecv;
 	return CurPacketSend+(NumPacket-CurPacketRecv);
 }
+//===========================================================================
+// CSharedTransportStreamer
+//---------------------------------------------------------------------------
+CSharedTransportStreamer::CSharedTransportStreamer(wstring name, BOOL receiver,
+	DWORD packet_sz, DWORD packet_num, DWORD extra_sz)
+  : CSharedPacketStreamer(name, receiver, packet_sz, packet_num,
+		packet_num*sizeof(DWORD)+extra_sz)
+{
+	PosSzPackets = Size() - extra_sz - packet_num*sizeof(DWORD) ;
+	LastLockedRecvCur = packet_num ;
+	TickLastTx = Elapsed();
+}
+//---------------------------------------------------------------------------
+CSharedTransportStreamer::~CSharedTransportStreamer()
+{
+	if(LastLockedRecvCur<PacketCount())
+		UnlockPacket(LastLockedRecvCur);
+}
+//---------------------------------------------------------------------------
+BOOL CSharedTransportStreamer::Tx(const LPVOID data, DWORD size, DWORD timeout)
+{
+	if(!IsValid()||FReceiver) return FALSE;
+	if(size>SzPacket) return FALSE;
+	DWORD cur = CurPacketSend ;
+	if(LockPacket(cur,timeout)) {
+		LPVOID sizes_top = &static_cast<LPBYTE>(Memory())[PosSzPackets];
+		static_cast<LPDWORD>(sizes_top)[CurPacketSend]=size;
+		BOOL res = Send(data, timeout);
+		if(!UnlockPacket(cur)) res = FALSE ;
+		if(res) TickLastTx = Elapsed() ;
+		return res;
+	}
+	return FALSE;
+}
+//---------------------------------------------------------------------------
+BOOL CSharedTransportStreamer::TxDirect(TXDIRECTFUNC func, PVOID arg, DWORD timeout)
+{
+	if(!IsValid()||FReceiver) return FALSE;
+	if(func==NULL) { // for retry
+		if(arg) *static_cast<BOOL*>(arg) = TRUE ;
+		return Send(NULL, timeout);
+	}
+	DWORD cur = CurPacketSend ;
+	if(LockPacket(cur,timeout)) {
+		LPBYTE data_top = &static_cast<LPBYTE>(Memory())[PosPackets];
+		DWORD sz = SzPacket;
+		BOOL res = FALSE ;
+		if(func(&data_top[CurPacketSend*SzPacket],sz,arg)) {
+			LPVOID sizes_top = &static_cast<LPBYTE>(Memory())[PosSzPackets];
+			static_cast<LPDWORD>(sizes_top)[CurPacketSend]=sz;
+			res = Send(NULL, timeout);
+		}
+		if(!UnlockPacket(cur)) res = FALSE ;
+		if(res) TickLastTx = Elapsed() ;
+		return res;
+	}
+	return FALSE;
+}
+//---------------------------------------------------------------------------
+BOOL CSharedTransportStreamer::Rx(LPVOID data, DWORD &size, DWORD timeout)
+{
+	if(!PacketRemain()) return FALSE;
+	DWORD cur = CurPacketRecv ;
+	if(LockPacket(cur,timeout)) {
+		LPVOID sizes_top = &static_cast<LPBYTE>(Memory())[PosSzPackets];
+		DWORD n = static_cast<LPDWORD>(sizes_top)[CurPacketRecv];
+		BOOL res = Recv(data, timeout);
+		if(res) {
+			if(LastLockedRecvCur<PacketCount()) {
+				// Unlock the previous locking point.
+				if(!UnlockPacket(LastLockedRecvCur))
+					res = FALSE;
+			}
+		}
+		if(res) {
+			size = n ;
+			// Store the current locking point to a LastLockedRecvCur variable.
+			// This locking point will be unlocked on the next time calling Rx.
+			// ( It's a purpose to prevent the behavior that the CurPacketSend
+			//   cursor jump over the CurPacketRecv cursor. )
+			LastLockedRecvCur = cur ;
+		}else
+			UnlockPacket(cur);
+		return res;
+	}
+	return FALSE;
+}
 //---------------------------------------------------------------------------
 } // End of namespace PRY8EAlByw
 //===========================================================================

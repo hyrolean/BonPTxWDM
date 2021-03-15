@@ -98,6 +98,7 @@ void CBonTuner::InitTunerProperty()
 	m_dwCurChannel = 0xFF;
 	m_hasStream = FALSE;
 	m_hTunerMutex = NULL;
+	m_hCtrlProcess = NULL;
 	m_iTunerId = m_iTunerStaticId = -1;
 
 	// ”ñ“¯ŠúTS
@@ -531,8 +532,8 @@ const BOOL CBonTuner::SetRealChannel(const DWORD dwCh)
 	if(!m_CmdClient) return FALSE ;
 
 	//ƒXƒgƒŠ[ƒ€ˆêŽž’âŽ~
-	StopAsyncTsThread();
 	m_CmdClient->CmdSetStreamEnable(FALSE);
+	StopAsyncTsThread();
 
 	if(dwCh >= m_Channels.size()) {
 		return FALSE;
@@ -569,8 +570,8 @@ BOOL CBonTuner::LoadTuner()
 	string ctrl_exe = m_strPath + PTXWDMCTRL_EXE ;
 	bool ctrl_exists = file_is_existed(ctrl_exe) ;
 
-	auto launch_ctrl = [&]() -> BOOL {
-		if(!file_is_existed(ctrl_exe)) return FALSE;
+	auto launch_ctrl = [&]() -> HANDLE {
+		if(!file_is_existed(ctrl_exe)) return NULL;
 		PROCESS_INFORMATION pi;
 		STARTUPINFOA si;
 		ZeroMemory(&si,sizeof(si));
@@ -582,9 +583,11 @@ BOOL CBonTuner::LoadTuner()
 			//SetThreadPriority(pi.hThread,ASYNCTSRECVTHREADPRIORITY);
 			DBGOUT("AUX Control program {%s} launched.\n", cmdline.c_str());
 		}
-		CloseHandle(pi.hThread);
-		CloseHandle(pi.hProcess);
-		return bRet ;
+		if(pi.hThread&&pi.hThread!=INVALID_HANDLE_VALUE) CloseHandle(pi.hThread);
+		if(!bRet&&pi.hProcess&&pi.hProcess!=INVALID_HANDLE_VALUE)
+		{ CloseHandle(pi.hProcess); pi.hProcess=NULL; }
+		if(pi.hProcess==INVALID_HANDLE_VALUE) return NULL;
+		return pi.hProcess ;
 	};
 
 	do {
@@ -599,7 +602,8 @@ BOOL CBonTuner::LoadTuner()
 				if(!TRYSPARES) break ;
 			}else {
 				auto client = new CPTxWDMCmdOperator(bonName);
-				if(!launch_ctrl()) client->Uniqulize(new CPTxWDMCmdServiceOperator(bonName));
+				m_hCtrlProcess=launch_ctrl();
+				if(!m_hCtrlProcess) client->Uniqulize(new CPTxWDMCmdServiceOperator(bonName));
 				if(!client->CmdOpenTuner(m_isISDBS,m_iTunerId)) {
 					delete client;
 					if(!TRYSPARES) break ;
@@ -620,7 +624,8 @@ BOOL CBonTuner::LoadTuner()
 					continue ;
 				}
 				auto client = new CPTxWDMCmdOperator(bonName);
-				if(!launch_ctrl()) client->Uniqulize(new CPTxWDMCmdServiceOperator(bonName));
+				m_hCtrlProcess=launch_ctrl();
+				if(!m_hCtrlProcess) client->Uniqulize(new CPTxWDMCmdServiceOperator(bonName));
 				if(!client->CmdOpenTuner(m_isISDBS,i)) {
 					delete client;
 					continue;
@@ -669,6 +674,11 @@ void CBonTuner::UnloadTuner()
 		m_CmdClient->CmdSetStreamEnable(FALSE);
 		m_CmdClient->CmdSetTunerSleep(TRUE);
 		m_CmdClient->CmdTerminate();
+		if(m_hCtrlProcess) {
+			WaitForSingleObject(m_hCtrlProcess,PTXWDMCMDTIMEOUT);
+			CloseHandle(m_hCtrlProcess);
+			m_hCtrlProcess=NULL;
+		}
 		if(m_hTunerMutex) {
 			ReleaseMutex(m_hTunerMutex);
 			CloseHandle(m_hTunerMutex);
@@ -770,7 +780,7 @@ int CBonTuner::AsyncTsThreadProcMain()
 
 	}else {
 
-		CPTxWDMStreamer streamer(m_strTunerStaticName+PTXWDMSTREAMER_SUFFIX,
+		CSharedTransportStreamer streamer(m_strTunerStaticName+PTXWDMSTREAMER_SUFFIX,
 			TRUE,ASYNCTSPACKETSIZE,CTRLPACKETS);
 
 		DWORD rem=0;
@@ -856,8 +866,8 @@ void CBonTuner::CloseTuner(void)
 		if(USELNB) {
 			ChangeLnbPower(FALSE);
 		}
-		StopAsyncTsThread();
 		m_CmdClient->CmdSetStreamEnable(FALSE);
+		StopAsyncTsThread();
 		m_CmdClient->CmdSetTunerSleep(TRUE);
 	}
 }
