@@ -130,6 +130,7 @@ protected: // settings
 
 	// ƒtƒ‰ƒO
 	BOOL USELNB;
+	BOOL LNB11V;
 	BOOL BON3LNB;
 	BOOL FASTSCAN;
 	BOOL TRYSPARES;

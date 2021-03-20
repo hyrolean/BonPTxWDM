@@ -115,6 +115,7 @@ void CBonTuner::InitTunerProperty()
 
 	// ƒtƒ‰ƒO‚Ì‰Šú‰»
 	USELNB = FALSE;
+	LNB11V = FALSE;
 	BON3LNB = FALSE;
 	FASTSCAN = FALSE;
 	TRYSPARES = FALSE;
@@ -236,6 +237,7 @@ bool CBonTuner::LoadIniFile(string strIniFileName)
 
   Section = "SET" ;
   LOADINT(USELNB);
+  LOADINT(LNB11V);
   LOADINT(BON3LNB);
   LOADINT(TRYSPARES);
   LOADINT(FASTSCAN);
@@ -649,6 +651,7 @@ BOOL CBonTuner::LoadTuner()
 		SrvOpt.MAXDUR_TMCC = MAXDUR_TMCC ;
 		SrvOpt.MAXDUR_TSID = MAXDUR_TSID ;
 		SrvOpt.StreamerPacketSize = ASYNCTSPACKETSIZE ;
+		SrvOpt.LNB11V = LNB11V ;
 		if(!m_CmdClient->CmdSetupServer(&SrvOpt)) {
 			MessageBeep(MB_ICONEXCLAMATION);
 			delete m_CmdClient ;

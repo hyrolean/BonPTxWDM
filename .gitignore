@@ -31,8 +31,19 @@
 *.out
 *.app
 
+# Dummy files
+*.~*
+*.ec?
+CLEANUP*.BAT
+build.bat
+
 # VC++ files
+.vs/
+Debug/
+Release/
+_intermediate_/
 *.user
+*.sdf
 
 # pt2wdm files
 Common/inc/*.h
