@@ -1,6 +1,7 @@
 //===========================================================================
 #include "stdafx.h"
 #include <cctype>
+#include <cstdarg>
 #include <process.h>
 #include <locale.h>
 #include <Shlwapi.h>
@@ -127,6 +128,21 @@ string lower_case(string str)
   CopyMemory(temp.data(),str.c_str(),(str.length()+1)*sizeof(char)) ;
   _strlwr_s(temp.data(),str.length()+1) ;
   return static_cast<string>(temp.data()) ;
+}
+//---------------------------------------------------------------------------
+string str_printf(const char *format, ...)
+{
+	va_list marker ;
+	va_start( marker, format ) ;
+	int edit_ln = _vscprintf(format, marker);
+	if(edit_ln++>0) {
+		BUFFER<char> edit_str(edit_ln);
+		vsprintf_s( edit_str.data(), edit_ln, format, marker ) ;
+		va_end( marker ) ;
+		return string(edit_str.data()) ;
+	}
+	va_end( marker ) ;
+	return string() ;
 }
 //---------------------------------------------------------------------------
 string file_drive_of(string filename)

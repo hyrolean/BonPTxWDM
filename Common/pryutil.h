@@ -31,6 +31,8 @@ std::wstring itows(int val,int radix=10);
 std::string upper_case(std::string str) ;
 std::string lower_case(std::string str) ;
 
+std::string str_printf(const char *format, ...);
+
 std::string file_drive_of(std::string filename);
 std::string file_path_of(std::string filename);
 std::string file_name_of(std::string filename);
@@ -514,13 +516,30 @@ public:
     size_-- ;
     return true ;
   }
+  bool pop_back() {
+    if(empty()) return false ;
+    size_-- ;
+    return true ;
+  }
+  void clear() { cue_ = 0 ; size_ = 0 ; }
   reference_type front() {
   #ifdef _DEBUG
     if(empty()) throw std::range_error("fixed_queue: front() range error.") ;
   #endif
     return buff_[cue_] ;
   }
-  void clear() { cue_ = 0 ; size_ = 0 ; }
+  reference_type back() {
+  #ifdef _DEBUG
+    if(empty()) throw std::range_error("fixed_queue: back() range error.") ;
+  #endif
+    return buff_[cue_+size_-1-(cue_+size_-1<grew_?0:grew_)] ;
+  }
+  reference_type operator[](size_type index) {
+  #ifdef _DEBUG
+    if(index>=size()) throw std::range_error("fixed_queue: operator[] range error.") ;
+  #endif
+    return buff_[cue_+index-(cue_+index<grew_?0:grew_)] ;
+  }
 };
 
   // CAsyncFifo
@@ -599,9 +618,9 @@ private:
 	LPVOID PMapView;
 	DWORD SzMapView;
 protected:
-	LPVOID Memory() const { return PMapView; }
+    LPVOID Memory() const { return PMapView; }
 	bool Lock(DWORD timeout = INFINITE) const ;
-	bool Unlock() const ;
+    bool Unlock() const ;
 protected:
 	CSharedMemory(std::wstring name, DWORD size);
 	virtual ~CSharedMemory();

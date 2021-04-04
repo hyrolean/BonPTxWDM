@@ -74,7 +74,6 @@ public:
 	BOOL Tx(const LPVOID data, DWORD size, DWORD timeout=INFINITE) ;
 	BOOL TxDirect(TXDIRECTFUNC Func, PVOID arg, DWORD timeout=INFINITE);
 	BOOL Rx(LPVOID data, DWORD &size, DWORD timeout=INFINITE) ;
-	DWORD LastTxAlive() { return TickLastTx; }
 };
 
 //---------------------------------------------------------------------------

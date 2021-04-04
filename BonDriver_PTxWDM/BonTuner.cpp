@@ -709,26 +709,25 @@ const BOOL CBonTuner::ChangeLnbPower(BOOL power)
 	if(hBonTunersMutex)
 		WaitForSingleObject(hBonTunersMutex , INFINITE);
 
-	wstring mutexFormat = L"BonDriver_PTxWDM LNB Power %d" ;
-	WCHAR wcsMutexName[100],wcsAnotherMutexName[100];
-	swprintf_s(wcsMutexName,mutexFormat.c_str(),m_iTunerStaticId);
+	const char mutexFormat[] = "BonDriver_PTxWDM LNB Power %d" ;
+	string mutexName = str_printf(mutexFormat, m_iTunerStaticId);
 	int anotherId = (m_iTunerStaticId&~1) | (m_iTunerStaticId&1?0:1) ;
-	swprintf_s(wcsAnotherMutexName,mutexFormat.c_str(),anotherId);
+	string anotherMutexName = str_printf(mutexFormat, anotherId);
 
 	if(m_isISDBS) {
 		if(power) {
 			if(!m_hLnbMutex) {
-				m_hLnbMutex = CreateMutex(NULL, TRUE, wcsMutexName);
+				m_hLnbMutex = CreateMutexA(NULL, TRUE, mutexName.c_str());
 			}
 		}else {
+			//対のミューテックスを開いてLnb使用中か確認する
+			HANDLE hAnother = OpenMutexA(MUTEX_ALL_ACCESS, FALSE, anotherMutexName.c_str());
+			if(hAnother) {
+				//対のチューナーがLnb電源供給中なので、電源OFFしない
+				power=TRUE;
+				CloseHandle(hAnother);
+			}
 			if(m_hLnbMutex) {
-				//対のミューテックスを開いてLnb使用中か確認する
-				HANDLE hAnother = OpenMutex(MUTEX_ALL_ACCESS, FALSE, wcsAnotherMutexName);
-				if(hAnother) {
-					//対のチューナーがLnb電源供給中なので、電源OFFしない
-					power=TRUE;
-					CloseHandle(hAnother);
-				}
 				ReleaseMutex(m_hLnbMutex);
 				CloseHandle(m_hLnbMutex);
 				m_hLnbMutex=NULL;
@@ -736,11 +735,11 @@ const BOOL CBonTuner::ChangeLnbPower(BOOL power)
 		}
 	}else {
 		power=FALSE;
-		if(HANDLE hMutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, wcsMutexName)) {
+		if(HANDLE hMutex = OpenMutexA(MUTEX_ALL_ACCESS, FALSE, mutexName.c_str())) {
 			power=TRUE;
 			CloseHandle(hMutex);
 		}
-		if(HANDLE hMutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, wcsAnotherMutexName)) {
+		if(HANDLE hMutex = OpenMutexA(MUTEX_ALL_ACCESS, FALSE, anotherMutexName.c_str())) {
 			power=TRUE;
 			CloseHandle(hMutex);
 		}

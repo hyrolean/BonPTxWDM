@@ -80,9 +80,7 @@ BOOL CPTxWDMCmdOperator::CmdOpenTuner(BOOL Sate, DWORD TunerID, DWORD timeout)
 	op.cmd = PTXWDMCMD_OPEN_TUNER ;
 	op.data[0] = Sate ;
 	op.data[1] = TunerID ;
-	LINEDEBUG;
 	if(!Xfer(op,op,timeout)) return FALSE;
-	LINEDEBUG;
 	return op.res ;
 }
 //---------------------------------------------------------------------------
@@ -99,7 +97,7 @@ BOOL CPTxWDMCmdOperator::CmdGetTunerCount(DWORD &Count, DWORD timeout)
 	OP op;
 	op.cmd = PTXWDMCMD_GET_TUNER_COUNT ;
 	if(!Xfer(op,op,timeout)) return FALSE;
-	Count = op.data[0];
+	if(op.res) Count = op.data[0];
 	return op.res;
 }
 //---------------------------------------------------------------------------
@@ -126,7 +124,7 @@ BOOL CPTxWDMCmdOperator::CmdIsStreamEnabled(BOOL &Enable, DWORD timeout)
 	OP op;
 	op.cmd = PTXWDMCMD_IS_STREAM_ENABLED ;
 	if(!Xfer(op,op,timeout)) return FALSE;
-	Enable = op.data[0];
+	if(op.res) Enable = op.data[0];
 	return op.res;
 }
 //---------------------------------------------------------------------------
@@ -139,7 +137,7 @@ BOOL CPTxWDMCmdOperator::CmdSetChannel(BOOL &Tuned, DWORD Freq, DWORD TSID,
 	op.data[1] = TSID ;
 	op.data[2] = Stream ;
 	if(!Xfer(op,op,timeout)) return FALSE;
-	Tuned = op.data[0];
+	if(op.res) Tuned = op.data[0];
 	return op.res;
 }
 //---------------------------------------------------------------------------
@@ -157,7 +155,7 @@ BOOL CPTxWDMCmdOperator::CmdGetIdListS(TSIDLIST &TSIDList, DWORD timeout)
 	OP op;
 	op.cmd = PTXWDMCMD_GET_IDLIST_S ;
 	if(!Xfer(op,op,timeout)) return FALSE;
-	for(int i=0;i<8;i++) TSIDList.Id[i] = op.data[i];
+	if(op.res) for(int i=0;i<8;i++) TSIDList.Id[i] = op.data[i];
 	return op.res;
 }
 //---------------------------------------------------------------------------
@@ -166,7 +164,7 @@ BOOL CPTxWDMCmdOperator::CmdGetIdS(DWORD &TSID, DWORD timeout)
 	OP op;
 	op.cmd = PTXWDMCMD_GET_ID_S ;
 	if(!Xfer(op,op,timeout)) return FALSE;
-	TSID = op.data[0];
+	if(op.res) TSID = op.data[0];
 	return op.res;
 }
 //---------------------------------------------------------------------------
@@ -194,9 +192,11 @@ BOOL CPTxWDMCmdOperator::CmdGetCnAgc(DWORD &Cn100, DWORD &CurAgc,
 	OP op;
 	op.cmd = PTXWDMCMD_GET_CN_AGC ;
 	if(!Xfer(op,op,timeout)) return FALSE;
-	Cn100	= op.data[0];
-	CurAgc	= op.data[1];
-	MaxAgc	= op.data[2];
+	if(op.res) {
+		Cn100	= op.data[0];
+		CurAgc	= op.data[1];
+		MaxAgc	= op.data[2];
+	}
 	return op.res;
 }
 //---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se5
 
   - Common/inc に以下のファイルを配置
     - PtDrvIfLib.h  (pt2wdmドライバの中に入っているもの)
-  
+
   - Common/lib に以下のファイルを配置
     - PtDrvIfLib.lib  (pt2wdmドライバの中に入っているもの)
     - PtDrvIfLib64.lib  (pt2wdmドライバの中に入っているもの)
@@ -45,3 +45,4 @@ BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se5
 - [x] EDCB/TVTest配下での動作(１プロセス１チューナー構成)
 - [x] Spinelなどのプロクシソフト配下での動作(１プロセス多チューナー構成)
 - [x] PTxWDMCtrl.exeとのバッファ通信の最適化
+
