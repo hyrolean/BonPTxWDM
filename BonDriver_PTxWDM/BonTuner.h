@@ -132,6 +132,8 @@ protected: // settings
 	BOOL USELNB;
 	BOOL LNB11V;
 	BOOL BON3LNB;
+	BOOL PRELOAD;
+	DWORD RETRYDUR;
 	BOOL FASTSCAN;
 	BOOL TRYSPARES;
 	DWORD SETCHDELAY;
@@ -169,7 +171,7 @@ protected: // internals
     std::wstring m_strTunerName ;
 	std::wstring m_strTunerStaticName;
 	int m_iTunerId, m_iTunerStaticId;
-	bool m_isISDBS;
+	bool m_isISDBS, m_bLoaded;
 
     // É`ÉÉÉìÉlÉãèÓïÒ
 	CHANNELS m_Channels ;

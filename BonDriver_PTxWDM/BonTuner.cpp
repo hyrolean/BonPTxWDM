@@ -100,6 +100,7 @@ void CBonTuner::InitTunerProperty()
 	m_hTunerMutex = NULL;
 	m_hCtrlProcess = NULL;
 	m_iTunerId = m_iTunerStaticId = -1;
+	m_isISDBS = m_bLoaded = false ;
 
 	// 非同期TS
 	ASYNCTSPACKETSIZE         = 48128UL                 ; // 非同期TSデータのパケットサイズ
@@ -117,6 +118,8 @@ void CBonTuner::InitTunerProperty()
 	USELNB = FALSE;
 	LNB11V = FALSE;
 	BON3LNB = FALSE;
+	PRELOAD = FALSE;
+	RETRYDUR = 3000;
 	FASTSCAN = FALSE;
 	TRYSPARES = FALSE;
 	SETCHDELAY = 0;
@@ -192,8 +195,8 @@ void CBonTuner::InitTunerProperty()
 		ASYNCTSPACKETSIZE,ASYNCTSFIFOTHREADWAIT,ASYNCTSFIFOTHREADPRIORITY ) ;
 	m_AsyncTSFifo->SetEmptyLimit(ASYNCTSEMPTYLIMIT) ;
 
-	for(auto t=Elapsed();Elapsed(t)<3000;Sleep(50)) {
-		if(LoadTuner())  break ;
+	if(PRELOAD) for(auto t=Elapsed();Elapsed(t)<RETRYDUR;Sleep(10)) {
+		if(LoadTuner())  { m_bLoaded = true ; break ; }
 	}
 }
 //---------------------------------------------------------------------------
@@ -239,6 +242,8 @@ bool CBonTuner::LoadIniFile(string strIniFileName)
   LOADINT(USELNB);
   LOADINT(LNB11V);
   LOADINT(BON3LNB);
+  LOADINT(PRELOAD);
+  LOADINT(RETRYDUR);
   LOADINT(TRYSPARES);
   LOADINT(FASTSCAN);
   LOADINT(SETCHDELAY);
@@ -853,11 +858,32 @@ void CBonTuner::StopAsyncTsThread()
 //-----
 const BOOL CBonTuner::OpenTuner(void)
 {
-	if(m_CmdClient) {
-		m_CmdClient->CmdSetTunerSleep(FALSE);
-		if(USELNB) {
-			ChangeLnbPower(TRUE);
+	for(bool retry=false;;) {
+
+		if(!m_bLoaded) {
+			for(auto t=Elapsed();Elapsed(t)<RETRYDUR;Sleep(10)) {
+				if(LoadTuner())  { m_bLoaded = true ; break ; }
+			}
+			if(!m_bLoaded)
+				return FALSE;
 		}
+
+		if(m_CmdClient) {
+			if(!m_CmdClient->CmdSetTunerSleep(FALSE,5000)) {
+				UnloadTuner();
+				m_bLoaded=false;
+				if(!retry) {
+					retry=true;
+					continue;
+				}
+				return FALSE;
+			}
+			if(USELNB) {
+				ChangeLnbPower(TRUE);
+			}
+		}
+
+		break;
 	}
 
 	return m_CmdClient!=NULL ? TRUE : FALSE ;
@@ -872,6 +898,11 @@ void CBonTuner::CloseTuner(void)
 		m_CmdClient->CmdSetStreamEnable(FALSE);
 		StopAsyncTsThread();
 		m_CmdClient->CmdSetTunerSleep(TRUE);
+	}
+
+	if(!PRELOAD) {
+		UnloadTuner();
+		m_bLoaded=false;
 	}
 }
 //-----
