@@ -927,6 +927,7 @@ const DWORD CBonTuner::WaitTsStream(const DWORD dwTimeOut)
 	if(!m_AsyncTSFifo) return WAIT_ABANDONED;
 
 	if(!m_AsyncTSFifo->Empty()) return WAIT_OBJECT_0;
+	if(!m_CmdClient) return WAIT_ABANDONED;
 
 	const DWORD dwRet = m_evAsyncTsStream.wait(dwTimeOut);
 
@@ -936,7 +937,7 @@ const DWORD CBonTuner::WaitTsStream(const DWORD dwTimeOut)
 
 	case WAIT_OBJECT_0:
 	case WAIT_TIMEOUT:
-		return (m_CmdClient)? dwRet : WAIT_ABANDONED;
+		return dwRet;
 	}
 
 	return WAIT_FAILED;
