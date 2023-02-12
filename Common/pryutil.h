@@ -31,6 +31,8 @@ std::wstring itows(int val,int radix=10);
 std::string upper_case(std::string str) ;
 std::string lower_case(std::string str) ;
 
+std::string uuid_string();
+
 std::string str_printf(const char *format, ...);
 
 std::string file_drive_of(std::string filename);
@@ -106,6 +108,9 @@ template<class Container,class String> void inline split(
 class event_object
 {
 private:
+#ifdef _DEBUG
+  int id;
+#endif
   HANDLE event ;
   std::wstring name ;
 public:

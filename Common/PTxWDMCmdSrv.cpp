@@ -126,7 +126,6 @@ BOOL CPTxWDMCmdServiceOperator::ResSetChannel(BOOL &Tuned, DWORD Freq,
 
 	const DWORD MAXDUR_FREQ = Settings_.MAXDUR_FREQ; //周波数調整に費やす最大時間(msec)
 	const DWORD MAXDUR_TMCC = Settings_.MAXDUR_TMCC; //TMCC取得に費やす最大時間(msec)
-	const DWORD MAXDUR_TSID = Settings_.MAXDUR_TSID; //TSID設定に費やす最大時間(msec)
 
 	//チューニング
 	bool tuned=false ;
@@ -167,10 +166,7 @@ BOOL CPTxWDMCmdServiceOperator::ResSetChannel(BOOL &Tuned, DWORD Freq,
 				}
 			}
 			if(!TSID) break ;
-			for (DWORD t=0,s=Elapsed(),n=0; t<MAXDUR_TSID ; t=Elapsed(s)) {
-				if(Tuner_->SetIdS(TSID)) { if(++n>=2) {tuned=true;break;} }
-				Sleep(50);
-			}
+			if(ResSetIdS(TSID)) tuned = true ;
 		}else {
 			TMCC_STATUS tmcc;
 			for (DWORD t=0,s=Elapsed(); t<MAXDUR_TMCC; t=Elapsed(s)) {
@@ -203,6 +199,7 @@ BOOL CPTxWDMCmdServiceOperator::ResGetIdListS(TSIDLIST &TSIDList)
 	KeepAlive();
 	if(Tuner_) {
 		TMCC_STATUS tmcc;
+		ZeroMemory(&tmcc,sizeof(tmcc));
 		if(Tuner_->GetTmcc(&tmcc)) {
 			for (int i=0 ; i<8 ; i++)
 				TSIDList.Id[i] = tmcc.u.bs.tsId[i] ;
@@ -225,11 +222,16 @@ BOOL CPTxWDMCmdServiceOperator::ResGetIdS(DWORD &TSID)
 //---------------------------------------------------------------------------
 BOOL CPTxWDMCmdServiceOperator::ResSetIdS(DWORD TSID)
 {
+	const DWORD MAXDUR_TSID = Settings_.MAXDUR_TSID; //TSID設定に費やす最大時間(msec)
 	exclusive_lock lock(&Critical_);
 	KeepAlive();
 	if(Tuner_) {
-		if(Tuner_->SetIdS(TSID))
-			return TRUE;
+		BOOL bRes = FALSE ;
+		for (DWORD t=0,s=Elapsed(),n=0; t<MAXDUR_TSID ; t=Elapsed(s)) {
+			if(Tuner_->SetIdS(TSID)) { if(++n>=2) {bRes=TRUE;break;} }
+			Sleep(50);
+		}
+		return bRes;
 	}
 	return FALSE;
 }

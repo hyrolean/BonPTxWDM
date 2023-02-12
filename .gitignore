@@ -36,6 +36,7 @@
 *.ec?
 CLEANUP*.BAT
 build.bat
+git_copy.bat
 
 # VC++ files
 .vs/

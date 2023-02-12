@@ -4,8 +4,12 @@
 #include <cstdarg>
 #include <process.h>
 #include <locale.h>
+#include <Rpc.h>
+#pragma comment(lib, "Rpcrt4.lib")
+#ifdef PRY8EAlByw_SHLWAPI
 #include <Shlwapi.h>
 #pragma comment(lib, "Shlwapi.lib")
+#endif
 
 #include "pryutil.h"
 //---------------------------------------------------------------------------
@@ -14,6 +18,14 @@ using namespace std ;
 //===========================================================================
 namespace PRY8EAlByw {
 //---------------------------------------------------------------------------
+
+#ifdef PRY8EAlByw_HRTIMER
+  #define wait_object HRWaitForSingleObject
+  #define delay HRSleep
+#else
+  #define wait_object WaitForSingleObject
+  #define delay Sleep
+#endif
 
 //===========================================================================
 // Statics
@@ -72,7 +84,7 @@ DWORD PastSleep(DWORD wait,DWORD start)
 {
   if(!wait) return start ;
   DWORD past = Elapsed(start,GetTickCount()) ;
-  if(wait>past) Sleep(wait-past) ;
+  if(wait>past) delay(wait-past);
   return start+wait ;
 }
 //---------------------------------------------------------------------------
@@ -128,6 +140,17 @@ string lower_case(string str)
   CopyMemory(temp.data(),str.c_str(),(str.length()+1)*sizeof(char)) ;
   _strlwr_s(temp.data(),str.length()+1) ;
   return static_cast<string>(temp.data()) ;
+}
+//---------------------------------------------------------------------------
+string uuid_string()
+{
+  UUID uuid_ ;
+  UuidCreate(&uuid_) ;
+  unsigned char * result ;
+  UuidToStringA(&uuid_,&result) ;
+  string str_result = (char*)result ;
+  RpcStringFreeA(&result);
+  return lower_case(str_result) ;
 }
 //---------------------------------------------------------------------------
 string str_printf(const char *format, ...)
@@ -196,7 +219,7 @@ int file_age_of(string filename)
 //---------------------------------------------------------------------------
 bool file_is_existed(string filename)
 {
-#if 0
+#ifndef PRY8EAlByw_SHLWAPI
   return file_age_of(filename.c_str()) != -1 ;
 #else
   return PathFileExistsA(filename.c_str()) && !folder_is_existed(filename) ;
@@ -205,7 +228,7 @@ bool file_is_existed(string filename)
 //---------------------------------------------------------------------------
 bool folder_is_existed(string filename)
 {
-#if 0
+#ifndef PRY8EAlByw_SHLWAPI
   DWORD attr = GetFileAttributesA(filename.c_str()) ;
   return attr!=MAXDWORD && (attr&FILE_ATTRIBUTE_DIRECTORY) ? true : false ;
 #else
@@ -629,8 +652,13 @@ static int event_create_count = 0 ;
 //---------------------------------------------------------------------------
 event_object::event_object(BOOL initialState_,wstring name_,BOOL security_)
 {
-  if(name_.empty()) name_ = L"Local\\event"+itows(event_create_count++) ;
+#ifdef _DEBUG
+  id = event_create_count;
+#endif
+  if(name_.empty()) name_ = L"Local\\event"+itows(event_create_count)+L"_"+mbcs2wcs(uuid_string()) ;
+
   name = name_ ;
+  event_create_count++;
 
   SECURITY_ATTRIBUTES sa,*psa=NULL;
   SECURITY_DESCRIPTOR sd;
@@ -647,25 +675,28 @@ event_object::event_object(BOOL initialState_,wstring name_,BOOL security_)
     }
   }
 
-  event = CreateEvent(psa,FALSE,initialState_,name.c_str()) ;
+  event = CreateEvent(psa,FALSE,initialState_,name.empty()?NULL:name.c_str()) ;
 #ifdef _DEBUG
   if(is_valid()) {
-    TRACE(L"event_object created. [name=%s]\r\n",name.c_str()) ;
+    TRACE(L"event_object(%d) created. [name=%s]\r\n",id,name.empty()?L"<EMPTY>":name.c_str()) ;
   }else {
-    TRACE(L"event_object failed to create. [name=%s]\r\n",name.c_str()) ;
+    TRACE(L"event_object(%d) failed to create. [name=%s]\r\n",id,name.empty()?L"<EMPTY>":name.c_str()) ;
   }
 #endif
 }
 //---------------------------------------------------------------------------
 event_object::event_object(const event_object &clone_source)
 {
+#ifdef _DEBUG
+  id = event_create_count++;
+#endif
   name = clone_source.name ;
   event = clone_source.open() ;
 #ifdef _DEBUG
   if(is_valid()) {
-    TRACE(L"event_object cloned. [name=%s]\r\n",name.c_str()) ;
+    TRACE(L"event_object(%d) cloned. [name=%s]\r\n",id,name.empty()?L"<EMPTY>":name.c_str()) ;
   }else {
-    TRACE(L"event_object failed to clone. [name=%s]\r\n",name.c_str()) ;
+    TRACE(L"event_object(%d) failed to clone. [name=%s]\r\n",id,name.empty()?L"<EMPTY>":name.c_str()) ;
   }
 #endif
 }
@@ -674,9 +705,9 @@ event_object::~event_object()
 {
 #ifdef _DEBUG
   if(is_valid()) {
-    TRACE(L"event_object finished. [name=%s]\r\n",name.c_str()) ;
+    TRACE(L"event_object(%d) disposed. [name=%s]\r\n",id,name.c_str()) ;
   }else {
-    TRACE(L"event_object finished. (failure) [name=%s]\r\n",name.c_str()) ;
+    TRACE(L"event_object(%d) disposed. (failure) [name=%s]\r\n",id,name.c_str()) ;
   }
 #endif
   if(is_valid()) CloseHandle(event) ;
@@ -691,7 +722,7 @@ HANDLE event_object::open() const
 //---------------------------------------------------------------------------
 DWORD event_object::wait(DWORD timeout)
 {
-  return is_valid() ? WaitForSingleObject(event,timeout) : WAIT_FAILED ;
+  return is_valid() ? wait_object(event,timeout) : WAIT_FAILED ;
 }
 //---------------------------------------------------------------------------
 BOOL event_object::set()
@@ -778,7 +809,7 @@ CAsyncFifo::CAsyncFifo(
     BufferPool.resize(MaximumPool);
 #ifdef ASYNCFIFO_HEAPBUFFERPOOL
     // ÉqÅ[ÉvçÏê¨
-    Heap = HeapCreate(flag, 0, 0);
+    Heap = HeapCreate(flag, PacketSize*TotalPool, PacketSize*MaximumPool);
     BufferPool.set_heap(Heap) ;
     BufferPool.set_heap_flag(flag) ;
 #endif
@@ -806,7 +837,7 @@ CAsyncFifo::~CAsyncFifo()
     bool abnormal=false ;
     if(AllocThread!=INVALID_HANDLE_VALUE) {
       AllocOrderEvent.set() ;
-      if(::WaitForSingleObject(AllocThread,30000) != WAIT_OBJECT_0) {
+      if(wait_object(AllocThread,30000) != WAIT_OBJECT_0) {
         ::TerminateThread(AllocThread, 0);
         abnormal=true ;
       }
@@ -1139,7 +1170,7 @@ bool CSharedMemory::IsValid() const
 bool CSharedMemory::Lock(DWORD timeout) const
 {
     if(!HMutex) return false ;
-    return WaitForSingleObject(HMutex, timeout) == WAIT_OBJECT_0 ;
+    return wait_object(HMutex, timeout) == WAIT_OBJECT_0 ;
 }
 //---------------------------------------------------------------------------
 bool CSharedMemory::Unlock() const
