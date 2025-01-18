@@ -11,12 +11,12 @@
 
 #include "../Common/PTxWDMCmd.h"
 #include "../Common/pryutil.h"
-#include "IBonDriver3.h"
+#include "IBonTransponder.h"
 
 void InitializeBonTuners(HMODULE hModule);
 void FinalizeBonTuners();
 
-class CBonTuner : public IBonDriver3
+class CBonTuner : public IBonDriver3Transponder
 {
 protected:
 	enum BAND {
@@ -32,6 +32,8 @@ protected:
 		WORD		Stream ;
 		WORD        TSID ;
 		std::wstring	Name ;
+		CHANNEL()
+		 : Space(L""),Band(BAND_na),Name(L""),Channel(0),Stream(0),TSID(0) {}
 		CHANNEL(std::wstring space, BAND band, int channel, std::wstring name,unsigned stream=0,unsigned tsid=0) {
 			Space = space ;
 			Band = band ;
@@ -50,7 +52,7 @@ protected:
 		}
 		bool isISDBT() { return Band==BAND_VU; }
 		bool isISDBS() { return Band==BAND_BS||Band==BAND_ND; }
-		int PtDrvChannel() {
+		int PtDrvChannel() const {
 			if(!Channel)
 				return -1;
 			switch(Band) {
@@ -73,6 +75,13 @@ protected:
 	};
 	typedef std::vector<CHANNEL> CHANNELS ;
 public: // IBonDriver åpè≥
+
+// IBonTransponder
+	LPCTSTR TransponderEnumerate(const DWORD dwSpace, const DWORD dwTransponder);
+	const BOOL TransponderSelect(const DWORD dwSpace, const DWORD dwTransponder);
+	const BOOL TransponderGetIDList(LPDWORD lpIDList, LPDWORD lpdwNumID);
+	const BOOL TransponderSetCurID(const DWORD dwID);
+	const BOOL TransponderGetCurID(LPDWORD lpdwID);
 
 // IBonDriver3
 	const DWORD GetTotalDeviceNum(void);
@@ -174,7 +183,7 @@ protected: // internals
 	bool m_isISDBS, m_bLoaded;
 
     // É`ÉÉÉìÉlÉãèÓïÒ
-	CHANNELS m_Channels ;
+	CHANNELS m_Channels, m_Transponders ;
     std::vector<DWORD> m_SpaceAnchors ;
     std::vector<DWORD> m_ChannelAnchors ;
     std::vector<std::wstring> m_InvisibleSpaces ;
@@ -183,11 +192,14 @@ protected: // internals
     DWORD space_index_of(DWORD sch) const ;
     DWORD channel_index_of(DWORD sch) const ;
     BOOL is_invalid_space(DWORD spc) const ;
+    int transponder_index_of(DWORD dwSpace, DWORD dwTransponder) const ;
+	BOOL select_ch(const CHANNEL &ch, BOOL doSetFreq=TRUE, BOOL doSetTSID=TRUE) ;
     void RebuildChannels() ;
 
 	DWORD			m_dwCurSpace;
 	DWORD			m_dwCurChannel;
 	BOOL			m_hasStream;
+	CHANNEL			m_chCur;
 	HANDLE			m_hTunerMutex;
 	HANDLE			m_hCtrlProcess;
 

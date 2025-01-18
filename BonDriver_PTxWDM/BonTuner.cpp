@@ -96,6 +96,7 @@ void CBonTuner::InitTunerProperty()
 	m_hLnbMutex = NULL;
 	m_dwCurSpace = 0xFF;
 	m_dwCurChannel = 0xFF;
+	m_chCur = CHANNEL();
 	m_hasStream = FALSE;
 	m_hTunerMutex = NULL;
 	m_hCtrlProcess = NULL;
@@ -306,8 +307,7 @@ bool CBonTuner::LoadIniFile(string strIniFileName)
 //---------------------------------------------------------------------------
 bool CBonTuner::LoadChannelFile(string strChannelFileName)
 {
-  m_Channels.clear() ;
-  //m_SpaceIndices.clear() ;
+  CHANNELS channels ;
 
   FILE *st=NULL ;
   fopen_s(&st,strChannelFileName.c_str(),"rt") ;
@@ -366,15 +366,15 @@ bool CBonTuner::LoadChannelFile(string strChannelFileName)
 	  if(name==L"")
 		name=subname ;
 	  /*if(freq>0&&channel<0)
-		m_Channels.push_back(
+		channels.push_back(
 		  CHANNEL(space,freq,name,stream,tsid)) ;
 	  else*/ if(band!=BAND_na&&channel>0) {
 		CHANNEL channel(space,band,channel,name,stream,tsid);
-		if(!channel.isISDBS()==!m_isISDBS) m_Channels.push_back(channel) ;
+		if(!channel.isISDBS()==!m_isISDBS) channels.push_back(channel) ;
 	  }else
 		continue ;
 	  if(space_name!=space) {
-		//m_SpaceIndices.push_back(m_Channels.size()-1) ;
+		//m_SpaceIndices.push_back(channels.size()-1) ;
 		space_name=space ;
 	  }
 	}
@@ -382,12 +382,19 @@ bool CBonTuner::LoadChannelFile(string strChannelFileName)
 
   fclose(st) ;
 
-  return true ;
+	if (!channels.empty()) {
+		m_Channels.swap(channels) ;
+		m_Transponders.swap(CHANNELS());
+		return true ;
+	}
+
+	return false ;
 }
 //---------------------------------------------------------------------------
 void CBonTuner::InitChannelToDefault()
 {
 	m_Channels.clear() ;
+	m_Transponders.clear() ;
 
 	wstring space; BAND band;
 
@@ -413,6 +420,10 @@ void CBonTuner::InitChannelToDefault()
 					m_Channels.push_back(
 					  CHANNEL(space,band,i,L"BS"+itows(i))) ;
 			}
+			for(int i=1;	i <= 23;	i+=2)
+			for(int j=0;	j<max<int>(DEFSPACEBSSTREAMS,1);	j++)
+				m_Transponders.push_back(
+					CHANNEL(space,band,i,L"BS"+itows(i))) ;
 		}
 
 		if(DEFSPACECS110) {
@@ -435,6 +446,10 @@ void CBonTuner::InitChannelToDefault()
 					m_Channels.push_back(
 					  CHANNEL(space,band,i,L"ND"+itows(i))) ;
 			}
+			for(int i=2;	i <= 24;	i+=2)
+			for(int j=0;	j<max<int>(DEFSPACECS110STREAMS,1);	j++)
+				m_Transponders.push_back(
+					CHANNEL(space,band,i,L"ND"+itows(i))) ;
 		}
 
 	}else { // ISDB_T
@@ -464,6 +479,8 @@ void CBonTuner::InitChannelToDefault()
 				  CHANNEL(space,band,i,itows(i)+L"ch")) ;
 		}
 		*/
+
+		copy(m_Channels.begin(), m_Channels.end(), back_inserter(m_Transponders)) ;
 	}
 }
 //---------------------------------------------------------------------------
@@ -489,6 +506,61 @@ BOOL CBonTuner::is_invalid_space(DWORD spc) const
   if(spc>=m_SpaceAnchors.size()) return TRUE ;
   std::wstring space_name = m_Channels[m_SpaceAnchors[spc]].Space ;
   return m_InvalidSpaces.find(space_name)==m_InvalidSpaces.end() ? FALSE:TRUE ;
+}
+//-----
+// トランスポンダのインデックスを返す
+int CBonTuner::transponder_index_of(DWORD dwSpace, DWORD dwTransponder) const
+{
+  if(m_Transponders.empty())
+    return -1 ; // transponder is not entried
+
+  if(is_invalid_space(dwSpace))
+    return -1 ; // space is over
+
+  size_t si = m_SpaceAnchors[dwSpace] ;
+
+  if(m_Transponders[si].Band!=BAND_BS && m_Transponders[si].Band!=BAND_ND)
+    return -1 ; // transponder is not supported
+
+  size_t tp = 0 , i = si ;
+  for(int ch=m_Transponders[si].Channel; tp<dwTransponder&&i<m_Transponders.size(); i++) {
+    if(m_Transponders[i].Space != m_Transponders[si].Space) break ;
+    if(m_Transponders[i].Channel != ch) {
+      ch = m_Transponders[i].Channel ; tp++;
+      if(tp==dwTransponder) break;
+    }
+  }
+
+  if(tp!=dwTransponder)
+    return -1 ; // transponder is not found
+
+  return (int) i ;
+}
+//-----
+// チャンネルを選択する
+BOOL CBonTuner::select_ch(const CHANNEL &ch, BOOL doSetFreq, BOOL doSetTSID)
+{
+	BOOL tuned = FALSE;
+	if(doSetFreq&&doSetTSID) {
+		m_CmdClient->CmdSetChannel(
+			tuned, ch.PtDrvChannel(), ch.TSID, ch.Stream ) ;
+	}else do {
+		if(doSetFreq) {
+			tuned = m_CmdClient->CmdSetFreq(ch.PtDrvChannel());
+			if(!tuned) break;
+		}
+		if(doSetTSID) {
+			if(!ch.TSID) {
+				m_CmdClient->CmdSetChannel(
+					tuned, ch.PtDrvChannel(), ch.TSID, ch.Stream ) ;
+			}else {
+				tuned = m_CmdClient->CmdSetIdS(ch.TSID);
+			}
+			if(!tuned) break;
+		}
+	}while(0);
+
+	return tuned ;
 }
 //---------------------------------------------------------------------------
 void CBonTuner::RebuildChannels()
@@ -547,13 +619,11 @@ const BOOL CBonTuner::SetRealChannel(const DWORD dwCh)
 	}
 
 	//チューニング
-	BOOL tuned = FALSE;
-	m_CmdClient->CmdSetChannel(
-		tuned, m_Channels[dwCh].PtDrvChannel(),
-		m_Channels[dwCh].TSID, m_Channels[dwCh].Stream ) ;
+	BOOL tuned = select_ch(m_Channels[dwCh]) ;
 
 	//ストリーム再開
 	if(tuned) {
+		m_chCur = m_Channels[dwCh] ;
 		if(m_CmdClient->CmdSetStreamEnable(TRUE))
 			StartAsyncTsThread();
 	}
@@ -898,6 +968,7 @@ void CBonTuner::CloseTuner(void)
 		m_CmdClient->CmdSetStreamEnable(FALSE);
 		StopAsyncTsThread();
 		m_CmdClient->CmdSetTunerSleep(TRUE);
+		m_chCur = CHANNEL();
 	}
 
 	if(!PRELOAD) {
@@ -1089,5 +1160,121 @@ const BOOL CBonTuner::SetLnbPower(const BOOL bEnable)
 {
 	if(!BON3LNB) return TRUE;
 	return ChangeLnbPower(bEnable) ;
+}
+//---------------------------------------------------------------------------
+  // IBonTransponder
+//-----
+LPCTSTR CBonTuner::TransponderEnumerate(const DWORD dwSpace, const DWORD dwTransponder)
+{
+	int idx = transponder_index_of(dwSpace, dwTransponder) ;
+	if(idx<0) return NULL ;
+
+	return m_Transponders[idx].Name.c_str();
+}
+//-----
+const BOOL CBonTuner::TransponderSelect(const DWORD dwSpace, const DWORD dwTransponder)
+{
+  if(!IsTunerOpening()) return FALSE;
+
+  int idx = transponder_index_of(dwSpace, dwTransponder) ;
+  if(idx<0) return FALSE ;
+
+  if(m_hasStream) {
+    //ストリーム一時停止
+    m_CmdClient->CmdSetStreamEnable(FALSE);
+    StopAsyncTsThread();
+    m_hasStream = FALSE ;
+  }
+
+  //チューニング
+  CHANNEL ch = m_Transponders[idx] ;
+  BOOL res = select_ch(ch, TRUE, FALSE) ;
+
+  if(res) {
+    m_dwCurSpace = dwSpace;
+    m_dwCurChannel = dwTransponder | TRANSPONDER_CHMASK ;
+    m_chCur = ch ;
+    m_hasStream = FALSE; // TransponderSetCurID はまだ行っていないので
+  }
+
+  return res ;
+}
+//-----
+const BOOL CBonTuner::TransponderGetIDList(LPDWORD lpIDList, LPDWORD lpdwNumID)
+{
+  if(!IsTunerOpening()) return FALSE;
+  if(m_chCur.Band!=BAND_BS&&m_chCur.Band!=BAND_ND) return FALSE;
+
+  const DWORD numId = 8 ;
+
+  if(lpdwNumID==NULL) {
+    return FALSE ;
+  }else if(lpIDList==NULL) {
+    *lpdwNumID = numId ;
+    return TRUE ;
+  }
+
+  TSIDLIST TSIDList ;
+
+  BOOL res = m_CmdClient->CmdGetIdListS(TSIDList);
+  if(res) {
+	  DWORD num = min(8,*lpdwNumID) ;
+	  for(DWORD i=0;i<num;i++) {
+	    DWORD id = TSIDList.Id[i] ;
+		if(id==0||id==0xffff) id = 0xFFFFFFFF ;
+		lpIDList[i] = id ;
+	  }
+	  *lpdwNumID = num ;
+  }
+
+  return res ;
+}
+//-----
+const BOOL CBonTuner::TransponderSetCurID(const DWORD dwID)
+{
+  if(!IsTunerOpening()) return FALSE;
+  if(m_chCur.Band!=BAND_BS&&m_chCur.Band!=BAND_ND) return FALSE;
+
+  if(m_hasStream) {
+    //ストリーム一時停止
+    m_CmdClient->CmdSetStreamEnable(FALSE);
+    StopAsyncTsThread();
+    m_hasStream=FALSE ;
+  }
+
+  CHANNEL ch = m_chCur ;
+  ch.TSID = (WORD) (dwID&0xFFFF) ;
+  BOOL res = select_ch(ch, FALSE, TRUE) ;
+
+  if(res) {
+    m_chCur = ch ;
+    m_hasStream = TRUE ;
+	//ストリーム再開
+	if(m_CmdClient->CmdSetStreamEnable(TRUE))
+		StartAsyncTsThread();
+  }
+
+  PurgeTsStream();
+
+  return res ;
+}
+//-----
+const BOOL CBonTuner::TransponderGetCurID(LPDWORD lpdwID)
+{
+  if(!IsTunerOpening()||!lpdwID) return FALSE;
+  if(m_chCur.Band!=BAND_BS&&m_chCur.Band!=BAND_ND) return FALSE;
+
+  if(!m_hasStream) {
+    *lpdwID=0xFFFFFFFF;
+    return TRUE;
+  }
+
+  DWORD id=0;
+  BOOL res = m_CmdClient->CmdGetIdS(id) ;
+  if(res) {
+    if(id==0||id==0xffff) id = 0xFFFFFFFF ;
+	*lpdwID=id;
+  }
+  return res ;
 }
 //===========================================================================
