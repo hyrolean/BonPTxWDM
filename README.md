@@ -40,6 +40,11 @@ BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se5
 
   **※β版です。無保証( NO WARRANTY )です。とりあえず、一連の動作に支障なく動く程度に仕上がっているとは思いますが、テスト期間が短い為、潜在的なバグについては未知数です。**
 
+  P.S. 2025/1/19 更新版より、BonDriver_PTx-ST_mod に付属の[PTxScanS](https://github.com/hyrolean/BonDriver_PTx-ST_mod/tree/master/PTxScanS)を使用することにより、トランスポンダを利用したチャンネルスキャンを行うことができるようになりました。
+  使い方は下記のように +df ｵﾌﾟｼｮﾝを用いると、.CSV.txt という拡張子のファイルが生成されますので、.ch.txt に変更するとチャンネルファイルとしてそのまま取り扱うことが可能です。 是非トライしてみてください。
+  ```
+  PTxScanS.exe +df BonDriver_PTxWDM-S0.dll
+  ```
 
 ## TODO
 - [x] EDCB/TVTest配下での動作(１プロセス１チューナー構成)
