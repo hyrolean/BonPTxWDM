@@ -1,7 +1,7 @@
 # BonPTxWDM BonDriver_PTxWDM.dll
 BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se507005.html) for EARTHSOFT PT1/PT2/PT3.
 
-## 構築と動作確認
+## ●構築と動作確認
 
   ソリューションを構築する前に以下のファイルを配置する必要があります。
 
@@ -44,6 +44,37 @@ BonDriver optimized to [pt2wdm](https://www.vector.co.jp/soft/winnt/hardware/se5
   使い方は下記のように +df ｵﾌﾟｼｮﾝを用いると、.CSV.txt という拡張子のファイルが生成されますので、.ch.txt に変更するとチャンネルファイルとしてそのまま取り扱うことが可能です。 是非トライしてみてください。
   ```
   PTxScanS.exe +df BonDriver_PTxWDM-S0.dll
+  ```
+
+## ●Spinelへの組み込み例
+
+ SpinelへこのBonDriverを組み込む場合は、Spinelのルートに存在する BonDriverMapping.json ファイルの "BonDriver_PT-ST" 項目を下記のように修正すると、"EarthSoft PTx" デバイス としてSpinelに認識されるようになります。
+
+  ```json
+    /* BonDriver_PT-ST */
+    {
+        "DeviceName": "PT",
+        "Mapping": {
+            "ISDB_T": "^BonDriver_PT([xw]|xWDM)?-T.*?\\.dll$",
+            "ISDB_S": "^BonDriver_PT([xw]|xWDM)?-S.*?\\.dll$",
+        }
+    },
+  ```
+
+ BonDriverフォルダにWin32版のファイルを配置するのを忘れないでください。チューナー1セット構成だと以下のような配置になります。
+
+  ```
+   <Spinel>
+    |-- Spinel.exe
+    |-- BonDriverMapping.json
+    |-- (略)
+    `--<BonDriver>
+        |-- BonDriver_PTxWDM-S0.dll (BS/CS用のBonDriver[S1] TunerPath = "PT/0/S/0") ※Win32版
+        |-- BonDriver_PTxWDM-T0.dll (地デジ用のBonDriver[T1] TunerPath = "PT/0/T/0") ※Win32版
+        |-- BonDriver_PTxWDM-S1.dll (BS/CS用のBonDriver[S2] TunerPath = "PT/0/S/1") ※Win32版
+        |-- BonDriver_PTxWDM-T1.dll (地デジ用のBonDriver[T2] TunerPath = "PT/0/T/1") ※Win32版
+        |-- BonDriver_PTxWDM.ini (設定ファイル)
+        `-- PTxWDMCtrl.exe (１プロセス多チューナー構成用制御プログラム) ※Win32版
   ```
 
 ## TODO
