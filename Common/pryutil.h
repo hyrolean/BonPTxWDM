@@ -99,6 +99,31 @@ template<class Container,class String> void inline split(
   }
 }
 //---------------------------------------------------------------------------
+
+	HANDLE inline MakeMutexDacl(std::wstring name,BOOL allowDup=FALSE,BOOL inheritH=FALSE) {
+		SECURITY_DESCRIPTOR sd = {0} ;
+		InitializeSecurityDescriptor(&sd,SECURITY_DESCRIPTOR_REVISION);
+		SetSecurityDescriptorDacl(&sd, TRUE, 0, FALSE);
+		SECURITY_ATTRIBUTES sa = {0} ;
+		sa.nLength = sizeof (sa);
+		sa.lpSecurityDescriptor = &sd;
+		sa.bInheritHandle = inheritH;
+		HANDLE h = CreateMutex(&sa,FALSE,name.c_str());
+		if(h!=NULL) {
+			if(!allowDup) {
+				if(::GetLastError()==ERROR_ALREADY_EXISTS) {
+					{ CloseHandle(h); h=NULL; }
+				}
+			}
+		}
+		return h;
+	}
+
+	HANDLE inline MakeMutexDaclA(std::string nameA, BOOL allowDup=FALSE,BOOL inheritH=FALSE) {
+		return MakeMutexDacl(mbcs2wcs(nameA),allowDup,inheritH);
+	}
+
+//---------------------------------------------------------------------------
 //===========================================================================
 // Classes
 //---------------------------------------------------------------------------

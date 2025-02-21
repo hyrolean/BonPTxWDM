@@ -105,7 +105,7 @@ CSharedPacketStreamer::CSharedPacketStreamer(wstring name,
 	if(PacketMutex) {
 		for(DWORD i=0;i<NumPacket;i++) {
 			wstring mutex_name = name + L"_SharedPacketStreamer_Mutex" + mbcs2wcs(itos(i)) ;
-			PacketMutex[i] = CreateMutex(NULL, FALSE, mutex_name.c_str());
+			PacketMutex[i] = MakeMutexDacl(mutex_name,TRUE);
 		}
 	}
 	CurPacketSend = CurPacketRecv = 0 ;

@@ -23,10 +23,11 @@ static HANDLE hBonTunersMutex = NULL ;
 
 #define PTXWDMCTRL_EXE "PTxWDMCtrl.exe"
 
+
 //---------------------------------------------------------------------------
 void InitializeBonTuners(HMODULE hModule)
 {
-	hBonTunersMutex = CreateMutex(NULL,FALSE,BONTUNERS_MUTEXNAME);
+	hBonTunersMutex = MakeMutexDacl(BONTUNERS_MUTEXNAME,TRUE);
 	::InitializeCriticalSection(&secBonTuners);
 	CBonTuner::HModule = hModule;
 }
@@ -60,6 +61,7 @@ extern "C" __declspec(dllexport) IBonDriver * CreateBonDriver()
   // CBonTuner
 //---------------------------------------------------------------------------
 HMODULE CBonTuner::HModule = NULL;
+
 //---------------------------------------------------------------------------
 CBonTuner::CBonTuner()
 {
@@ -674,8 +676,8 @@ BOOL CBonTuner::LoadTuner()
 
 		if(m_iTunerId>=0) { // ID固定
 			swprintf_s(bonName,BONTUNER_STATIC_FORMAT,(m_isISDBS?L'S':L'T'),m_iTunerId) ;
-			if(HANDLE mutex = OpenMutex(MUTEX_ALL_ACCESS,FALSE,bonName)) {
-				CloseHandle(mutex);
+			HANDLE mutex = MakeMutexDacl(bonName);
+			if(mutex==NULL) {
 				if(!TRYSPARES) break ;
 			}else {
 				auto client = new CPTxWDMCmdOperator(bonName);
@@ -683,12 +685,13 @@ BOOL CBonTuner::LoadTuner()
 				if(!m_hCtrlProcess) client->Uniqulize(new CPTxWDMCmdServiceOperator(bonName));
 				if(!client->CmdOpenTuner(m_isISDBS,m_iTunerId)) {
 					delete client;
+					CloseHandle(mutex);
 					if(!TRYSPARES) break ;
 				}else {
 					m_CmdClient = client;
 					m_iTunerStaticId = m_iTunerId;
 					m_strTunerStaticName = bonName;
-					m_hTunerMutex = CreateMutex(NULL, TRUE, bonName);
+					m_hTunerMutex = mutex;
 				}
 			}
 		}
@@ -696,7 +699,8 @@ BOOL CBonTuner::LoadTuner()
 		if(!m_CmdClient) { // ID自動割当
 			for(int i=0;i<num;i++) {
 				swprintf_s(bonName,BONTUNER_STATIC_FORMAT,(m_isISDBS?L'S':L'T'),i) ;
-				if(HANDLE mutex = OpenMutex(MUTEX_ALL_ACCESS,FALSE,bonName)) {
+				HANDLE mutex = MakeMutexDacl(bonName);
+				if(mutex==NULL) {
 					CloseHandle(mutex);
 					continue ;
 				}
@@ -705,12 +709,13 @@ BOOL CBonTuner::LoadTuner()
 				if(!m_hCtrlProcess) client->Uniqulize(new CPTxWDMCmdServiceOperator(bonName));
 				if(!client->CmdOpenTuner(m_isISDBS,i)) {
 					delete client;
+					CloseHandle(mutex);
 					continue;
 				}
 				m_CmdClient = client;
 				m_iTunerStaticId = i;
 				m_strTunerStaticName = bonName;
-				m_hTunerMutex = CreateMutex(NULL, TRUE, bonName);
+				m_hTunerMutex = mutex;
 				break;
 			}
 		}
@@ -758,7 +763,6 @@ void CBonTuner::UnloadTuner()
 			m_hCtrlProcess=NULL;
 		}
 		if(m_hTunerMutex) {
-			ReleaseMutex(m_hTunerMutex);
 			CloseHandle(m_hTunerMutex);
 			m_hTunerMutex = NULL;
 		}
@@ -766,7 +770,6 @@ void CBonTuner::UnloadTuner()
 		m_CmdClient = NULL ;
 	}
 	if(m_hLnbMutex) {
-		ReleaseMutex(m_hLnbMutex);
 		CloseHandle(m_hLnbMutex);
 		m_hLnbMutex = NULL;
 	}
@@ -792,7 +795,7 @@ const BOOL CBonTuner::ChangeLnbPower(BOOL power)
 	if(m_isISDBS) {
 		if(power) {
 			if(!m_hLnbMutex) {
-				m_hLnbMutex = CreateMutexA(NULL, TRUE, mutexName.c_str());
+				m_hLnbMutex = MakeMutexDaclA(mutexName,TRUE);
 			}
 		}else {
 			//対のミューテックスを開いてLnb使用中か確認する
@@ -803,7 +806,6 @@ const BOOL CBonTuner::ChangeLnbPower(BOOL power)
 				CloseHandle(hAnother);
 			}
 			if(m_hLnbMutex) {
-				ReleaseMutex(m_hLnbMutex);
 				CloseHandle(m_hLnbMutex);
 				m_hLnbMutex=NULL;
 			}

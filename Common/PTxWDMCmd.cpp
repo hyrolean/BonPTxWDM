@@ -20,7 +20,7 @@ CPTxWDMCmdOperator::CPTxWDMCmdOperator(wstring name, bool server)
 	UniServer = NULL;
 
     wstring xfer_mutex_name = Name() + L"_PTxWDMCmdOperator_XferMutex";
-    HXferMutex = CreateMutex(NULL, FALSE, xfer_mutex_name.c_str());
+    HXferMutex = MakeMutexDacl(xfer_mutex_name,TRUE);
 }
 //---------------------------------------------------------------------------
 CPTxWDMCmdOperator::~CPTxWDMCmdOperator()
