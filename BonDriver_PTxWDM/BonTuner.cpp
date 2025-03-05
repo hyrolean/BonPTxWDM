@@ -25,22 +25,23 @@ static HANDLE hBonTunersMutex = NULL ;
 
 
 //---------------------------------------------------------------------------
-void InitializeBonTuners(HMODULE hModule)
+void InitializeBonTuners()
 {
-	hBonTunersMutex = MakeMutexDacl(BONTUNERS_MUTEXNAME,TRUE);
-	::InitializeCriticalSection(&secBonTuners);
-	CBonTuner::HModule = hModule;
+	if(!hBonTunersMutex) {
+		hBonTunersMutex = MakeMutexDacl(BONTUNERS_MUTEXNAME,TRUE);
+		::InitializeCriticalSection(&secBonTuners);
+	}
 }
 //---------------------------------------------------------------------------
 void FinalizeBonTuners()
 {
-	::EnterCriticalSection(&secBonTuners);
-	vector<CBonTuner*> clone;
-	copy(BonTuners.begin(),BonTuners.end(),back_inserter(clone));
-	for(auto bon: clone) if(bon!=NULL) bon->Release();
-	::LeaveCriticalSection(&secBonTuners);
-	::DeleteCriticalSection(&secBonTuners);
 	if(hBonTunersMutex) {
+		::EnterCriticalSection(&secBonTuners);
+		vector<CBonTuner*> clone;
+		copy(BonTuners.begin(),BonTuners.end(),back_inserter(clone));
+		for(auto bon: clone) if(bon!=NULL) bon->Release();
+		::LeaveCriticalSection(&secBonTuners);
+		::DeleteCriticalSection(&secBonTuners);
 		CloseHandle(hBonTunersMutex) ;
 		hBonTunersMutex=NULL;
 	}
@@ -125,6 +126,7 @@ void CBonTuner::InitTunerProperty()
 	RETRYDUR = 3000;
 	FASTSCAN = FALSE;
 	TRYSPARES = FALSE;
+	PREVENTSUSPENDING = FALSE;
 	SETCHDELAY = 0;
 	CTRLPACKETS = PTXWDMSTREAMER_DEFPACKETNUM;
 	MAXDUR_FREQ = 1000; //é¸îgêîí≤êÆÇ…îÔÇ‚Ç∑ç≈ëÂéûä‘(msec)
@@ -247,8 +249,9 @@ bool CBonTuner::LoadIniFile(string strIniFileName)
   LOADINT(BON3LNB);
   LOADINT(PRELOAD);
   LOADINT(RETRYDUR);
-  LOADINT(TRYSPARES);
   LOADINT(FASTSCAN);
+  LOADINT(TRYSPARES);
+  LOADINT(PREVENTSUSPENDING);
   LOADINT(SETCHDELAY);
   LOADINT(CTRLPACKETS); if(CTRLPACKETS<1) CTRLPACKETS=1;
   LOADINT(MAXDUR_FREQ);
@@ -839,6 +842,8 @@ int CBonTuner::AsyncTsThreadProcMain()
 
 	BOOL &terminated = m_bAsyncTsTerm ;
 
+	suspend_preventer sp(this);
+
 	if(uniserver) {
 
 		while(!terminated) {
@@ -924,6 +929,17 @@ void CBonTuner::StopAsyncTsThread()
 	}
 	CloseHandle(Thread);
 	Thread = INVALID_HANDLE_VALUE ;
+}
+//---------------------------------------------------------------------------
+void CBonTuner::PreventSuspending(BOOL bInner)
+{
+	if(!PREVENTSUSPENDING) return ;
+	if(bInner) {
+		SetThreadExecutionState(
+			ES_CONTINUOUS|ES_SYSTEM_REQUIRED|ES_AWAYMODE_REQUIRED);
+	}else {
+		SetThreadExecutionState(ES_CONTINUOUS);
+	}
 }
 //---------------------------------------------------------------------------
   // IBonDriver
@@ -1279,4 +1295,19 @@ const BOOL CBonTuner::TransponderGetCurID(LPDWORD lpdwID)
   }
   return res ;
 }
+//===========================================================================
+// static initializer
+
+class bon_static_initializer_t {
+public:
+	bon_static_initializer_t() {
+		InitializeBonTuners();
+	}
+	~bon_static_initializer_t() {
+		FinalizeBonTuners();
+	}
+};
+
+static bon_static_initializer_t static_initializer;
+
 //===========================================================================
